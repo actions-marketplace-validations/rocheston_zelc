@@ -1,0 +1,14 @@
+-- 👤 Creator: Haja Mo
+package soc.governance.gui
+use gui
+
+⚙️ keep THEME: String = "Gruvbox-Dark"
+
+🔥 check WarroomUpdate
+  ⚠️ when threat_level_changed
+    ⚡ do
+      ✨ gui.set_theme THEME
+      ✨ gui.render_3d_globe mode "THREAT_HEATMAP"
+      🎨 gui.draw_text "AINA STATUS: ACTIVE" at [10, 10] color #b8bb26
+    🔴 end
+🔴 end

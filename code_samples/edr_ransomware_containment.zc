@@ -1,0 +1,92 @@
+-- ============================================================================
+-- 🛡️ ROCHESTON ZELC PROGRAMMING LANGUAGE
+-- 👤 Creator: Haja Mo
+-- 🏢 Organization: Rocheston
+-- 📜 Platform: Rocheston Agentic AI Cybersecurity Automation Platform
+-- ============================================================================
+
+-- Playbook: Rapid Ransomware Containment
+-- Intent: Detects encryption velocity anomalies, immediately isolates the infected endpoint, and preserves forensic state via disk snapshot.
+-- Infrastructure: AINA, EDR (CrowdStrike/Defender), AWS EC2, Rosecoin.
+-- Note: This playbook demonstrates iterating over arrays in a kinetic block using the 'each' primitive.
+
+package soc.endpoint
+use aina, edr, aws, threat
+
+-- ============================================================================
+-- 1. CONFIGURATION GOVERNORS
+-- Define the maximum threshold for file modifications per second.
+-- ============================================================================
+⚙️ keep ENCRYPTION_VELOCITY_LIMIT = 50
+⚙️ keep ISOLATION_MODE = "strict_network_quarantine"
+⚙️ keep CRITICAL_TIER = ["prod-db", "prod-api", "vault-core"]
+
+-- ============================================================================
+-- 2. HELPER FUNCTIONS (Read-Only)
+-- ============================================================================
+⭕️ define assess_ransomware_confidence(file_operations, host_tier)
+  -- Utilize AINA to evaluate if the file operations match known ransomware patterns (e.g., changing extensions to .lock)
+  🧠 set ai_verdict = aina.analyze(file_operations, "ransomware_heuristics")
+  
+  -- If the host is in our critical tier, we escalate the confidence score automatically
+  ⚠️ when host_tier in CRITICAL_TIER
+    🔹 change ai_verdict.confidence = ai_verdict.confidence + 20
+  🔴 end
+
+  return ai_verdict
+🔴 end
+
+-- ============================================================================
+-- 3. THE ENTRY POINT (The Check Block)
+-- ============================================================================
+🔥 check RansomwareOutbreakDefense
+  
+  -- Trigger Gate: Monitor EDR telemetry for rapid file system modifications
+  ⚠️ when file_modifications_per_sec > ENCRYPTION_VELOCITY_LIMIT
+    
+    🔹 set infected_host = event.hostname
+    🔹 set suspicious_procs = event.active_processes
+    🔹 set threat_assessment = assess_ransomware_confidence(event.file_ops, infected_host)
+
+    -- Gate: Only execute kinetic containment if AI confidence is extremely high
+    ⚠️ when threat_assessment.confidence > 95
+      
+      🚨 alert critical message "🦠 RANSOMWARE VELOCITY DETECTED ON {infected_host}"
+      📡 notify teams channel "Incident Response" message "Initiating 400ms Subnet Isolation Protocol"
+
+      -- ============================================================================
+      -- 4. THE KINETIC ZONE (Action and Remediation)
+      -- ============================================================================
+      ⚡ do
+        
+        -- Action 1: Instantly sever the host from the network to prevent lateral spread
+        ☁️ edr isolate host infected_host mode ISOLATION_MODE
+        
+        -- Action 2: Iterate through the malicious processes and terminate them
+        -- The 'each' keyword loops through collections safely within the kinetic boundary
+        ⭕️ each proc in suspicious_procs
+          ☁️ edr kill process proc.pid on infected_host
+        🔴 end
+        
+        -- Action 3: Trigger a cloud-native snapshot of the EC2 instance for post-mortem DFIR
+        ☁️ aws ec2 snapshot instance infected_host
+        
+        -- ============================================================================
+        -- 5. EVIDENCE & PROOF (Audit Trail)
+        -- ============================================================================
+        📝 evidence record "Ransomware_Subnet_Containment" details {
+          target_host: infected_host,
+          processes_terminated: suspicious_procs,
+          encryption_rate: file_modifications_per_sec,
+          ai_confidence: threat_assessment.confidence,
+          containment_time: now(),
+          snapshot_triggered: true
+        }
+        
+        ⛓️ rosecoin anchor evidence_pack "latest"
+        
+      🔴 end
+      
+    🔴 end
+  🔴 end
+🔴 end

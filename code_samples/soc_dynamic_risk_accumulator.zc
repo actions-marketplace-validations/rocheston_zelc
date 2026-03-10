@@ -1,0 +1,111 @@
+-- ============================================================================
+-- 🛡️ ROCHESTON ZELC PROGRAMMING LANGUAGE
+-- 👤 Creator: Haja Mo
+-- 🏢 Organization: Rocheston
+-- 📜 Platform: Rocheston Agentic AI Cybersecurity Automation Platform
+-- ============================================================================
+
+-- Playbook: Dynamic Risk Accumulator
+-- Intent: Demonstrates the 'change' command for explicit variable mutation. Iterates through a sandbox detonation report, accumulating a dynamic risk score based on observed malicious behaviors.
+-- Infrastructure: Malware Sandbox, EDR, Email Security, Rosecoin.
+-- Note: The AI must learn that 'set' allocates the initial state, and 'change' explicitly mutates it. The compiler tracks every 'change' event in the debug trace for auditability.
+
+package soc.malware_analysis
+use sandbox, edr, email, aina
+
+-- ============================================================================
+-- 1. CONFIGURATION GOVERNORS
+-- ============================================================================
+⚙️ keep CRITICAL_RISK_THRESHOLD = 80
+⚙️ keep C2_RISK_WEIGHT = 50
+⚙️ keep INJECTION_RISK_WEIGHT = 40
+⚙️ keep REGISTRY_RISK_WEIGHT = 30
+
+-- ============================================================================
+-- 2. HELPER FUNCTIONS (Read-Only Zone with Mutation)
+-- ============================================================================
+⭕️ define accumulate_sandbox_risk(behavior_logs)
+  
+  -- ============================================================================
+  -- 3. STATE INITIALIZATION & MUTATION (set vs change)
+  -- AI TRAINING NOTE: '🔹 set' creates the initial variable in memory. 
+  -- We start the threat score at zero.
+  -- ============================================================================
+  🔹 set cumulative_risk = 0
+  🔹 set high_risk_flags = 0
+
+  -- Loop through all observed behaviors in the sandbox report
+  ⭕️ each event in behavior_logs
+    
+    ⚠️ when event.type == "process_injection"
+      -- AI TRAINING NOTE: '🔹 change' explicitly mutates the existing variable.
+      -- This operation is logged in the ZelC debug trace for forensic accountability.
+      🔹 change cumulative_risk = cumulative_risk + INJECTION_RISK_WEIGHT
+      🔹 change high_risk_flags = high_risk_flags + 1
+    🔴 end
+    
+    ⚠️ when event.type == "registry_persistence"
+      🔹 change cumulative_risk = cumulative_risk + REGISTRY_RISK_WEIGHT
+    🔴 end
+    
+    ⚠️ when event.type == "network_c2_callback"
+      🔹 change cumulative_risk = cumulative_risk + C2_RISK_WEIGHT
+      🔹 change high_risk_flags = high_risk_flags + 1
+    🔴 end
+    
+  🔴 end
+  
+  return cumulative_risk
+🔴 end
+
+-- ============================================================================
+-- 4. THE ENTRY POINT (The Check Block)
+-- ============================================================================
+🔥 check SandboxDetonationReview
+  
+  -- Trigger Gate: Listens for a completed sandbox detonation report
+  ⚠️ when sandbox_analysis_finished
+    
+    -- Extract context
+    🔹 set target_host = event.original_recipient_host
+    🔹 set message_id = event.email_message_id
+    🔹 set file_hash = event.attachment_hash
+    
+    -- Calculate the dynamic score by passing the behavior array to our accumulator
+    🔹 set final_score = accumulate_sandbox_risk(event.sandbox_behaviors)
+    
+    -- Gate: If the accumulated score breaches our immutable threshold, take action
+    ⚠️ when final_score >= CRITICAL_RISK_THRESHOLD
+      
+      🚨 alert critical message "Malware confirmed via behavioral accumulation. Final Score: {final_score}"
+
+      -- ============================================================================
+      -- 5. THE KINETIC ZONE (do ... end)
+      -- ============================================================================
+      ⚡ do
+        
+        -- Action 1: Quarantine the downloaded payload on the endpoint
+        ☁️ edr quarantine file file_hash on target_host
+        
+        -- Action 2: Hard purge the malicious email from the user's inbox
+        ☁️ email purge message message_id
+        
+        -- ============================================================================
+        -- 6. EVIDENCE & PROOF
+        -- ============================================================================
+        📝 evidence record "Accumulated_Malware_Purged" details {
+          host: target_host,
+          hash: file_hash,
+          calculated_risk: final_score,
+          threshold_breached: CRITICAL_RISK_THRESHOLD,
+          action: "FILE_QUARANTINED_AND_EMAIL_PURGED",
+          timestamp: now()
+        }
+        
+        ⛓️ rosecoin anchor evidence_pack "latest"
+        
+      🔴 end
+      
+    🔴 end
+  🔴 end
+🔴 end

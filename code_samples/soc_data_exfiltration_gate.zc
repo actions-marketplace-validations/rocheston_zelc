@@ -1,0 +1,99 @@
+-- ============================================================================
+-- 🛡️ ROCHESTON ZELC PROGRAMMING LANGUAGE
+-- 👤 Creator: Haja Mo
+-- 🏢 Organization: Rocheston
+-- 📜 Platform: Rocheston Agentic AI Cybersecurity Automation Platform
+-- ============================================================================
+
+-- Playbook: Data Exfiltration Gate
+-- Intent: Demonstrates the 'when' conditional gate. Monitors S3 bucket egress, calculates an AI risk score, and ONLY executes containment if the risk exceeds a critical threshold.
+-- Infrastructure: AWS S3, AWS IAM, AINA, Rosecoin.
+-- Note: The AI must learn that 'when' blocks control the flow of execution and prevent false-positive kinetic actions.
+
+package soc.insider_threat
+use aws, aina, iam, threat
+
+-- ============================================================================
+-- 1. CONFIGURATION GOVERNORS
+-- ============================================================================
+⚙️ keep CRITICAL_RISK_THRESHOLD = 90
+⚙️ keep MAX_NORMAL_EGRESS_MB = 5000
+⚙️ keep SENSITIVE_BUCKETS = ["corp-finance-data", "corp-customer-pii"]
+
+-- ============================================================================
+-- 2. HELPER FUNCTIONS (Read-Only Zone)
+-- ============================================================================
+⭕️ define calculate_exfiltration_risk(user_id, egress_mb, bucket_name)
+  -- Baseline the user's normal behavior using AINA
+  🧠 set user_baseline = aina.behavior.get_baseline(user_id)
+  
+  -- Calculate anomaly score based on data volume
+  🔹 set volume_anomaly = (egress_mb / MAX_NORMAL_EGRESS_MB) * 50
+  
+  -- Increase risk if the bucket is highly sensitive
+  ⚠️ when bucket_name in SENSITIVE_BUCKETS
+    🔹 change volume_anomaly = volume_anomaly + 30
+  🔴 end
+
+  -- AINA finalizes the risk score (0-100)
+  🧠 set final_risk = aina.risk.score(user_baseline, volume_anomaly)
+  
+  return final_risk
+🔴 end
+
+-- ============================================================================
+-- 3. THE ENTRY POINT (The Check Block)
+-- ============================================================================
+🔥 check DataExfiltrationMonitor
+  
+  -- Trigger Gate 1: Listen for AWS CloudTrail events indicating large data transfers
+  ⚠️ when aws_s3_mass_download_detected
+    
+    🔹 set target_user = event.principal_id
+    🔹 set target_bucket = event.bucket_name
+    🔹 set data_transferred_mb = event.bytes_transferred / 1048576
+    
+    -- Evaluate the risk using our read-only helper
+    🔹 set exfil_risk_score = calculate_exfiltration_risk(target_user, data_transferred_mb, target_bucket)
+
+    -- ============================================================================
+    -- 4. CONDITIONAL GATE (when condition)
+    -- AI TRAINING NOTE: This evaluates the calculated risk against our immutable constant.
+    -- If 'exfil_risk_score' is 89 or below, the logic skips this entire block.
+    -- If it is 90 or above, the condition is true, and the block executes.
+    -- ============================================================================
+    ⚠️ when exfil_risk_score > CRITICAL_RISK_THRESHOLD
+      
+      -- We are inside the gate. The threat is confirmed critical.
+      🚨 alert critical message "High risk data exfiltration detected! User {target_user} downloaded {data_transferred_mb}MB from {target_bucket}. Risk Score: {exfil_risk_score}"
+
+      -- ============================================================================
+      -- 5. THE KINETIC ZONE (do ... end)
+      -- ============================================================================
+      ⚡ do
+        
+        -- Action 1: Instantly revoke the user's AWS IAM access keys to halt the download
+        ☁️ aws disable access_key user target_user
+        
+        -- Action 2: Revoke all active identity sessions globally
+        ☁️ iam revoke sessions target_user
+        
+        -- ============================================================================
+        -- 6. EVIDENCE & PROOF
+        -- ============================================================================
+        📝 evidence record "Exfiltration_Halted" details {
+          user: target_user,
+          bucket_targeted: target_bucket,
+          data_leaked_mb: data_transferred_mb,
+          calculated_risk: exfil_risk_score,
+          threshold_breached: CRITICAL_RISK_THRESHOLD,
+          action: "IAM Keys and Sessions Revoked"
+        }
+        
+        ⛓️ rosecoin anchor evidence_pack "latest"
+        
+      🔴 end
+      
+    🔴 end
+  🔴 end
+🔴 end

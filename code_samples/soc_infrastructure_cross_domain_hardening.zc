@@ -1,0 +1,100 @@
+-- ============================================================================
+-- 🛡️ ROCHESTON ZELC PROGRAMMING LANGUAGE
+-- 👤 Creator: Haja Mo
+-- 🏢 Organization: Rocheston
+-- 📜 Platform: Rocheston Agentic AI Cybersecurity Automation Platform
+-- ============================================================================
+
+-- Playbook: Cross-Domain Infrastructure Hardening (Infrastructure Nouns)
+-- Intent: Demonstrates 'iam', 'kms', 'kube', and 'waf'. 
+-- Coordinates a unified defense across identity, secrets, and container layers.
+-- Infrastructure: Zelfire XDR, AWS/Azure Cloud, Kubernetes, HashiCorp Vault.
+-- Note: 'hsm' and 'kms' are used for the highest level of cryptographic assurance.
+
+package soc.infrastructure_ops
+use iam, kms, kube, waf, cloud, rosecoin, slack
+
+-- ============================================================================
+-- 1. CONFIGURATION GOVERNORS (Strongly Typed)
+-- ============================================================================
+⚙️ keep TARGET_CLUSTER: String = "prod-customer-api-01"
+⚙️ keep VAULT_PATH: String = "secret/data/production/api-keys"
+⚙️ keep CLOUD_REGION: String = "us-east-1"
+
+-- ============================================================================
+-- 2. THE ENTRY POINT (The Check Block)
+-- ============================================================================
+🔥 check InfrastructureHardeningCycle
+  
+  -- Trigger Gate: SIEM detects a leaked API key on a public GitHub repo
+  ⚠️ when siem_detect_secret_leak
+    
+    🔹 set leaked_key_id: String = event.key_id
+    🔹 set associated_user: String = event.username
+    
+    🚨 alert critical message "INFRASTRUCTURE BREACH: Leaked key {leaked_key_id} detected. Initiating cross-domain rotation."
+
+    -- ============================================================================
+    -- 3. THE IDENTITY & SECRETS LAYER (iam, kms, vault, hsm)
+    -- ============================================================================
+    ⚡ do
+      
+      -- Action 1: Disable the compromised identity in IAM
+      -- Voice-friendly: "IAM disable user..."
+      ☁️ iam disable user associated_user
+      
+      -- Action 2: Deactivate the leaked key in the Cloud provider
+      ☁️ cloud delete access_key leaked_key_id in CLOUD_REGION
+      
+      -- Action 3: Rotate the master secret in the Vault/KMS
+      -- This ensures that even if the attacker has the key, the underlying secret is changed.
+      -- If backed by an HSM, the rotation is performed in hardware.
+      ☁️ kms rotate key "api-master-encryptor"
+      ☁️ vault update VAULT_PATH with generate_secure_string(32)
+      
+      -- ============================================================================
+      -- 4. THE COMPUTE & NETWORK LAYER (kube, waf, firewall)
+      -- ============================================================================
+      -- Action 4: Update the WAF to block requests using the old key signature
+      ☁️ waf block pattern "leaked-key-signature-{leaked_key_id}"
+      
+      -- Action 5: Perform a rolling restart of the Kube Cluster pods
+      -- This forces the microservices to pull the new rotated secret from the Vault.
+      -- Voice-friendly: "Kube restart deployment..."
+      ☁️ kube restart deployment "api-gateway" in TARGET_CLUSTER
+      
+      -- Action 6: Update the Firewall to whitelist only internal Kube traffic to the DB
+      ☁️ firewall restrict "db-production-01" to TARGET_CLUSTER
+
+      -- ============================================================================
+      -- 5. THE DATA & LOGGING LAYER (storage, db, siem)
+      -- ============================================================================
+      -- Action 7: Enable deep auditing on the DB to monitor for post-leak access
+      ☁️ db enable_audit "sensitive-tables-access"
+      
+      -- Action 8: Send a high-fidelity 'trace' to the SIEM for the post-mortem
+      📝 log trace "SECRET_ROTATION_SUCCESSFUL" details {
+          identity: associated_user,
+          cluster: TARGET_CLUSTER,
+          key_rotated: leaked_key_id
+      }
+
+      -- Action 9: Notify the DevSecOps team
+      📡 notify slack channel "#devsecops-alerts" message "🏗️ *Infrastructure Re-Hardened* \n*Status:* `ROTATED & REDEPLOYED` \n*Domains:* IAM, KMS, KUBE, WAF. \n*Identity:* `{associated_user}` has been disabled."
+
+      -- ============================================================================
+      -- 6. EVIDENCE & PROOF
+      -- ============================================================================
+      📝 evidence record "Infrastructure_Hardening_Cycle" details {
+          leaked_key: leaked_key_id,
+          vault_updated: true,
+          pods_restarted: true,
+          action: "FULL_STACK_REMEDIATION_COMPLETE"
+      }
+      
+      -- Anchor the infrastructure state change to Rosecoin
+      ⛓️ rosecoin anchor evidence_pack "latest"
+      
+    🔴 end
+  🔴 end
+🔴 end

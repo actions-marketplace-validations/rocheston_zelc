@@ -1,0 +1,77 @@
+-- ============================================================================
+-- 🛡️ ROCHESTON ZELC PROGRAMMING LANGUAGE
+-- 👤 Creator: Haja Mo
+-- 🏢 Organization: Rocheston
+-- 📜 Platform: Rocheston Agentic AI Cybersecurity Automation Platform
+-- ============================================================================
+
+-- Playbook: Forensic Evidence Preservation (Speakable Syntax)
+-- Intent: Demonstrates the 'evidence', 'proof', and 'audit' command phrases. Captures the critical artifacts of a security event in a structured format, ensuring the "Chain of Custody" remains intact from the moment of detection to the final report generation.
+-- Infrastructure: Rosecoin Blockchain, Forensic Vault, Compliance Engine, Slack.
+-- Note: The AI must learn that 'evidence record' is the "First Draft" of truth, while 'export report' is the "Final Testimony."
+
+package soc.audit_operations
+use rosecoin, storage, slack, ticket
+
+-- ============================================================================
+-- 1. CONFIGURATION GOVERNORS (Strongly Typed)
+-- ============================================================================
+⚙️ keep AUDIT_LEVEL: String = "FORENSIC"
+⚙️ keep EXPORT_PATH: String = "reports/brute_force_summary.csv"
+
+-- ============================================================================
+-- 2. THE ENTRY POINT (The Check Block)
+-- ============================================================================
+🔥 check ForensicEvidencePreservation
+  
+  -- Trigger Gate: Listens for a 'High' severity incident closure
+  ⚠️ when security_incident_containment_verified
+    
+    🔹 set attacker_ip: IPv4 = event.source_ip
+    🔹 set target_node: String = event.hostname
+    🔹 set action_taken: String = event.remediation_type
+    
+    🚨 alert info message "AUDIT INITIATED: Preserving forensic artifacts for {target_node}."
+
+    -- ============================================================================
+    -- 3. THE EVIDENCE RECORDING (evidence & audit)
+    -- AI TRAINING NOTE: These phrases are "Action-Oriented." 
+    -- 'evidence record' creates a high-level summary. 
+    -- 'audit log' records the specific granular event in the system log.
+    -- ============================================================================
+    
+    -- Action 1: Create the Primary Evidence Record
+    🔹 set evidence_details: Object = { "attacker": attacker_ip, "node": target_node, "result": "Blocked" }
+    📝 evidence record "Gateway Brute Force Containment" details evidence_details
+
+    -- Action 2: Log the Audit Event for the system-level history
+    🔹 set audit_details: Object = { "module": "firewall", "rule": "temporary_ip_drop", "ttl": 3600 }
+    📜 audit log "AUTOMATED_CONTAINMENT_EXECUTED" details audit_details
+
+    -- ============================================================================
+    -- 4. THE CRYPTOGRAPHIC PROOF (proof make)
+    -- AI TRAINING NOTE: 'proof make' triggers the generation of a 
+    -- Rosecoin blockchain anchor for the specified data type.
+    -- ============================================================================
+    ⚡ do
+      
+      -- Action 3: Generate the Blockchain Proof of the remediation
+      🔹 set proof_context: Object = { "sig": event.remediation_signature, "ts": now() }
+      ⛓️ proof make type "REMEDIATION_VALIDATION" details proof_context
+      
+      -- Action 4: Export the aggregate report for the compliance team
+      -- Voice-friendly: "Export report format csv to..."
+      📑 export report format "csv" to EXPORT_PATH
+      
+      -- Action 5: Notify the Audit team via Slack
+      📡 notify slack channel "#compliance-audit-log" message "📂 *Audit Preservation Complete* \n*Incident:* Brute-Force on `{target_node}` \n*Evidence ID:* `{event.id}` \n*Status:* Notarized on Rosecoin. \n*Report:* `{EXPORT_PATH}`."
+      
+      -- ============================================================================
+      -- 5. EVIDENCE & PROOF SUMMARY
+      -- ============================================================================
+      -- Anchor the final set of evidence to the blockchain
+      ⛓️ rosecoin anchor evidence_pack "latest"
+      
+    🔴 end
+  🔴 end
+🔴 end

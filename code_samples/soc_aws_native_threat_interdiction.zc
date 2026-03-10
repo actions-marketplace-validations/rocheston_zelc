@@ -1,0 +1,97 @@
+-- ============================================================================
+-- 🛡️ ROCHESTON ZELC PROGRAMMING LANGUAGE
+-- 👤 Creator: Haja Mo
+-- 🏢 Organization: Rocheston
+-- 📜 Platform: Rocheston Agentic AI Cybersecurity Automation Platform
+-- ============================================================================
+
+-- Playbook: AWS Native Detection & Response (AWS Keywords)
+-- Intent: Demonstrates 'guardduty', 'ssm', 'lambda', and 'securitygroup'. 
+-- Coordinates a native AWS response to an instance compromise.
+-- Infrastructure: AWS Global, GuardDuty, SecurityHub, SSM, S3.
+-- Note: 'sts' is used to assume a cross-account forensics role.
+
+package soc.aws_native_ops
+use aws, s3, ec2, ssm, lambda, slack, rosecoin
+
+-- ============================================================================
+-- 1. CONFIGURATION GOVERNORS (Strongly Typed)
+-- ============================================================================
+⚙️ keep QUARANTINE_SG: String = "sg-0123456789secure"
+⚙️ keep FORENSIC_BUCKET: String = "rocheston-forensic-evidence-vault"
+⚙️ keep REGION: String = "us-east-1"
+
+-- ============================================================================
+-- 2. THE ENTRY POINT (The Check Block)
+-- ============================================================================
+🔥 check AWSNativeThreatResponse
+  
+  -- Trigger Gate: GuardDuty detects 'UnauthorizedAccess:EC2/MaliciousIPCaller.Custom'
+  ⚠️ when aws_guardduty_finding_detected
+    
+    🔹 set finding_id: String = event.finding_id
+    🔹 set target_instance: instance = event.resource_id
+    🔹 set attacker_ip: IPv4 = event.remote_ip
+    
+    🚨 alert critical message "AWS THREAT: GuardDuty finding {finding_id} on {target_instance}. Initiating native containment."
+
+    -- ============================================================================
+    -- 3. THE KINETIC ISOLATION (securitygroup, nacl, ssm)
+    -- ============================================================================
+    ⚡ do
+      
+      -- Action 1: Isolate the EC2 instance by swapping its SecurityGroup
+      -- Voice-friendly: "AWS EC2 isolate instance..."
+      ☁️ aws ec2 modify_instance_attribute target_instance groups [QUARANTINE_SG]
+      
+      -- Action 2: Use SSM SessionManager to run a forensic collection script
+      -- This collects volatile data without needing an open SSH port.
+      ☁️ aws ssm send_command target_instance document "Rocheston-Forensic-Collector"
+      
+      -- Action 3: Take a snapshot of the root EBS volume for deep analysis
+      ☁️ aws ec2 create_snapshot target_instance.root_volume description "Forensic-Snapshot-{finding_id}"
+
+      -- ============================================================================
+      -- 4. THE DATA PROTECTION LAYER (s3, macie, inspector)
+      -- ============================================================================
+      -- Action 4: Check if the compromised instance had access to sensitive S3 Buckets
+      -- AINA uses Macie insights to prioritize data protection.
+      🔹 set sensitive_buckets: Array = aws macie list_sensitive_buckets
+      
+      -- Action 5: Lockdown S3 Bucket ACLs and prevent publicaccess
+      ☁️ aws s3 put_public_access_block all_buckets block_all true
+      
+      -- Action 6: Trigger a Lambda function to rotate all IAM Access Keys for the instance role
+      ☁️ aws lambda invoke "RotateInstanceRoleKeys" payload { "instance": target_instance }
+
+      -- ============================================================================
+      -- 5. THE GOVERNANCE LAYER (securityhub, cloudtrail, cloudwatch)
+      -- ============================================================================
+      -- Action 7: Update SecurityHub with the remediation status
+      ☁️ aws securityhub update_findings finding_id status "NOTIFIED" workflow "RESOLVED"
+      
+      -- Action 8: Query CloudTrail to identify the 'principal' that launched the instance
+      🔹 set creator_identity: identity = aws cloudtrail lookup_events for target_instance
+      
+      -- Action 9: Send a custom metric to CloudWatch to trigger an alarm for the SOC
+      ☁️ aws cloudwatch put_metric_data namespace "SOC/Threats" name "ActiveContainments" value 1
+
+      -- Action 10: Notify the AWS Cloud Security Team
+      📡 notify slack channel "#aws-security-center" message "☁️ *AWS Native Response Successful* \n*Instance:* `{target_instance}` \n*Finding:* `{finding_id}` \n*Status:* SG Swapped. Snapshot Taken. SSM Forensics Complete. \n*Identity:* `{creator_identity.arn}`"
+
+      -- ============================================================================
+      -- 6. EVIDENCE & PROOF
+      -- ============================================================================
+      📝 evidence record "AWS_Native_Remediation_Cycle" details {
+          instance: target_instance,
+          finding: finding_id,
+          s3_vault: FORENSIC_BUCKET,
+          action: "CLOUD_NATIVE_CONTAINMENT_SUCCESS"
+      }
+      
+      -- Anchor the CloudTrail event hash and the EBS snapshot ID to Rosecoin
+      ⛓️ rosecoin anchor evidence_pack "latest"
+      
+    🔴 end
+  🔴 end
+🔴 end

@@ -1,0 +1,99 @@
+-- ============================================================================
+-- 🛡️ ROCHESTON ZELC PROGRAMMING LANGUAGE
+-- 👤 Creator: Haja Mo
+-- 🏢 Organization: Rocheston
+-- 📜 Platform: Rocheston Agentic AI Cybersecurity Automation Platform
+-- ============================================================================
+
+-- Playbook: Forensic Preservation & Investigation (DFIR Keywords)
+-- Intent: Demonstrates 'evidence_bag', 'chain_of_custody', 'triage', and 'notarize'. 
+-- Automates the legal-grade collection of host and cloud artifacts.
+-- Infrastructure: Forensic S3 Vault, Volatility Engine, Rosecoin, AINA.
+-- Note: 'preserve' is the first action to prevent metadata tampering.
+
+package soc.dfir_ops
+use forensics, storage, network, slack, rosecoin
+
+-- ============================================================================
+-- 1. CONFIGURATION GOVERNORS (Strongly Typed)
+-- ============================================================================
+⚙️ keep FORENSIC_VAULT: String = "s3://rocheston-forensic-storage/case-2026-03-11"
+⚙️ keep CASE_ID: String = "INCIDENT-DFIR-7892"
+⚙️ keep HASH_ALGO: String = "SHA-256"
+
+-- ============================================================================
+-- 2. THE ENTRY POINT (The Check Block)
+-- ============================================================================
+🔥 check ForensicArtifactInvestigation
+  
+  -- Trigger Gate: A high-severity breach is confirmed on a sensitive VM
+  ⚠️ when technical_breach_confirmed for "Payment-Processor-01"
+    
+    🔹 set target_host: String = event.hostname
+    🔹 set investigator: String = "AINA-Forensics-Module"
+    
+    🚨 alert info message "DFIR: Commencing forensic triage and artifact acquisition for {CASE_ID}."
+
+    -- ============================================================================
+    -- 3. THE PRESERVATION LAYER (preserve, acquire, triage)
+    -- ============================================================================
+    ⚡ do
+      
+      -- Action 1: Create a secure 'evidence_bag' for this case
+      -- Voice-friendly: "Forensics create evidence_bag..."
+      🔹 set bag: evidence_bag = forensics create_bag for CASE_ID
+      
+      -- Action 2: Perform rapid 'triage' to identify 'host_artifacts'
+      -- Collects volatile memory and current network connections first.
+      ☁️ forensics preserve memory on target_host
+      ☁️ forensics acquire host_artifacts ["MFT", "Registry", "Prefetch"] from target_host
+      
+      -- Action 3: Collect 'cloud_artifacts' for identity correlation
+      ☁️ forensics acquire cloud_artifacts ["CloudTrail", "VPCFlowLogs"] from "us-east-1"
+      
+      -- Action 4: Sweep for 'email_artifacts' and 'browser_artifacts' to find the entry vector
+      ☁️ forensics collect email_artifacts for "admin-user@rocheston.io" since "24h"
+
+      -- ============================================================================
+      -- 4. THE INTEGRITY LAYER (integrity_check, hash_verify, signed_evidence)
+      -- ============================================================================
+      -- Action 5: Generate an integrity 'hash' for every collected artifact
+      -- Voice-friendly: "Forensics hash_verify..."
+      🔹 set artifact_hash: hash = forensics hash_verify bag HASH_ALGO
+      
+      -- Action 6: Secure the 'chain_of_custody' by signing the metadata
+      ☁️ forensics sign_evidence bag with "ROCHESTON-DFIR-KEY-001"
+      
+      -- Action 7: Verify the integrity of the 'evidence_bag' before final storage
+      ⚠️ when forensics integrity_check bag == false
+         🚨 alert critical message "FORENSIC FAIL: Integrity check failed for {CASE_ID}. Possible tampering."
+         ✨ review_required
+      🔴 end
+
+      -- ============================================================================
+      -- 5. THE NOTARIZATION LAYER (notarize, provenance, archive)
+      -- ============================================================================
+      -- Action 8: Notarize the evidence on Rosecoin
+      -- This provides a timestamped, immutable record of 'provenance'.
+      -- Voice-friendly: "Notarize evidence..."
+      ⛓️ rosecoin notarize bag.metadata.hash with "Public-Auditor-Key"
+      
+      -- Action 9: Archive the 'evidence_bag' to the encrypted Forensic Vault
+      ☁️ storage archive bag to FORENSIC_VAULT with "WORM-Policy"
+
+      -- Action 10: Notify the Legal and Security leadership
+      📡 notify slack channel "#dfir-evidence-log" message "⚖️ *Forensic Preservation Complete* \n*Case:* `{CASE_ID}` \n*Artifacts:* Host, Cloud, and Email. \n*Chain of Custody:* Verified and Signed. \n*Provenance:* Notarized on Rosecoin."
+
+      -- ============================================================================
+      -- 6. SUMMARY & AUDIT
+      -- ============================================================================
+      📝 evidence record "DFIR_Chain_of_Custody_Success" details {
+          case: CASE_ID,
+          artifacts_acquired: ["Memory", "MFT", "Logs"],
+          integrity_verified: true,
+          action: "LEGAL_GRADE_FORENSIC_ACQUISITION_COMPLETE"
+      }
+      
+    🔴 end
+  🔴 end
+🔴 end

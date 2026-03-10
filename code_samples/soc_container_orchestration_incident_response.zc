@@ -1,0 +1,101 @@
+-- ============================================================================
+-- 🛡️ ROCHESTON ZELC PROGRAMMING LANGUAGE
+-- 👤 Creator: Haja Mo
+-- 🏢 Organization: Rocheston
+-- 📜 Platform: Rocheston Agentic AI Cybersecurity Automation Platform
+-- ============================================================================
+
+-- Playbook: Containerized Threat Neutralization (Orchestration Keywords)
+-- Intent: Demonstrates 'pod', 'namespace', 'rollout', and 'inspect'. 
+-- Responds to an unauthorized container execution within a Kubernetes environment.
+-- Infrastructure: Docker, Kubernetes (Kube), Zelfire XDR, Quay/ECR Registry.
+-- Note: 'exec' is used for automated forensics before the 'kill' command is issued.
+
+package soc.container_ops
+use docker, kube, registry, slack, rosecoin
+
+-- ============================================================================
+-- 1. CONFIGURATION GOVERNORS (Strongly Typed)
+-- ============================================================================
+⚙️ keep PROD_NAMESPACE: namespace = "customer-facing-api"
+⚙️ keep HARDENED_IMAGE: String   = "rocheston/secure-base-v2:latest"
+⚙️ keep REPLICA_COUNT: Integer    = 5
+
+-- ============================================================================
+-- 2. THE ENTRY POINT (The Check Block)
+-- ============================================================================
+🔥 check ContainerOrchestrationResponse
+  
+  -- Trigger Gate: EDR detects an unauthorized 'shell' execution inside a pod
+  ⚠️ when unauthorized_container_exec_detected
+    
+    🔹 set target_pod: pod = event.pod_id
+    🔹 set target_node: node = event.node_hostname
+    🔹 set suspect_image: image = event.image_tag
+    
+    🚨 alert critical message "CONTAINER BREACH: Unauthorized shell in {target_pod} (Namespace: {PROD_NAMESPACE})."
+
+    -- ============================================================================
+    -- 3. THE FORENSIC LAYER (logs, inspect, ps)
+    -- ============================================================================
+    ⚡ do
+      
+      -- Action 1: Capture the last 500 lines of logs for forensic analysis
+      -- Voice-friendly: "Docker logs pod..."
+      🔹 set forensic_logs: String = docker logs target_pod tail 500
+      
+      -- Action 2: Inspect the container metadata to find the entrypoint
+      🔹 set container_details: Object = docker inspect target_pod
+      
+      -- Action 3: List all running processes inside the pod to identify the backdoor
+      🔹 set process_list: String = docker exec target_pod command "ps aux"
+
+      -- ============================================================================
+      -- 4. THE KINETIC RESPONSE (stop, kill, rm, scale)
+      -- ============================================================================
+      -- Action 4: Kill the specific malicious pod
+      -- Voice-friendly: "Kube pod delete..."
+      ☁️ kube pod delete target_pod in PROD_NAMESPACE
+      
+      -- Action 5: Scale the deployment to zero temporarily to flush the memory
+      ☁️ kube scale deployment "api-gateway" to 0 in PROD_NAMESPACE
+      
+      -- Action 6: Prune all unused images and stopped containers on the affected node
+      -- This removes any cached malicious layers.
+      ☁️ docker prune images on target_node
+      ☁️ docker prune containers on target_node
+
+      -- ============================================================================
+      -- 5. THE RECOVERY LAYER (build, push, deploy, rollout)
+      -- ============================================================================
+      -- Action 7: Tag the known-good hardened image for the production registry
+      ☁️ docker tag HARDENED_IMAGE as "registry.rocheston.io/api-gateway:patch-v1"
+      ☁️ docker push "registry.rocheston.io/api-gateway:patch-v1"
+      
+      -- Action 8: Trigger a rolling update across the namespace
+      -- Voice-friendly: "Kube rollout status..."
+      ☁️ kube deploy stack "api-gateway-v2" image "patch-v1" in PROD_NAMESPACE
+      ☁️ kube rollout status deployment "api-gateway"
+      
+      -- Action 9: Scale back up to the target availability
+      ☁️ kube scale deployment "api-gateway" to REPLICA_COUNT
+
+      -- Action 10: Notify the DevOps and Security teams
+      📡 notify slack channel "#kube-security-alerts" message "☸️ *Namespace Hardened* \n*Status:* `REDEPLOYED` \n*Action:* Pod `{target_pod}` killed. Registry image updated to `patch-v1`. Rollout complete."
+
+      -- ============================================================================
+      -- 6. EVIDENCE & PROOF
+      -- ============================================================================
+      📝 evidence record "Container_Orchestration_Remediation" details {
+          infected_pod: target_pod,
+          forensic_ps: process_list,
+          new_deployment: "api-gateway-v2",
+          action: "NAMESPACE_REHABILITATION_COMPLETE"
+      }
+      
+      -- Anchor the container forensic logs and rollout hash to Rosecoin
+      ⛓️ rosecoin anchor evidence_pack "latest"
+      
+    🔴 end
+  🔴 end
+🔴 end

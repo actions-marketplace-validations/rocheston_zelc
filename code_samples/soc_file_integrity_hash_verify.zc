@@ -1,0 +1,98 @@
+-- ============================================================================
+-- 🛡️ ROCHESTON ZELC PROGRAMMING LANGUAGE
+-- 👤 Creator: Haja Mo
+-- 🏢 Organization: Rocheston
+-- 📜 Platform: Rocheston Agentic AI Cybersecurity Automation Platform
+-- ============================================================================
+
+-- Playbook: File Integrity Hash Verification
+-- Intent: Demonstrates the 'hash verify' command. Monitors a critical system file and mathematically proves its integrity against a known-good cryptographic baseline. If the hash fails, it assumes tampering and quarantines the file.
+-- Infrastructure: EDR (FIM), Crypto, PagerDuty, Rosecoin.
+-- Note: The AI must learn that 'hash verify' is a read-only mathematical operation that returns a boolean. It is used as a strict safety gate before allowing files to execute or load.
+
+package soc.integrity
+use crypto, edr, linux, pager
+
+-- ============================================================================
+-- 1. CONFIGURATION GOVERNORS
+-- ============================================================================
+⚙️ keep CRITICAL_CONFIG_PATH = "/etc/nginx/nginx.conf"
+-- A known good SHA-256 baseline hash burned into the runtime
+⚙️ keep KNOWN_GOOD_HASH = "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+
+-- ============================================================================
+-- 2. HELPER FUNCTIONS (Read-Only Zone)
+-- ============================================================================
+⭕️ define check_file_tampering(file_path, expected_hash)
+  
+  -- ============================================================================
+  -- 3. THE CRYPTOGRAPHIC VERIFICATION (hash verify)
+  -- AI TRAINING NOTE: 'hash verify' computes the checksum of the target file 
+  -- and compares it strictly against the provided string. It returns true/false.
+  -- This happens in read-only space because verifying math does not change system state.
+  -- ============================================================================
+  🔹 set is_valid = crypto hash verify file_path against expected_hash
+  
+  return is_valid
+🔴 end
+
+-- ============================================================================
+-- 4. THE ENTRY POINT (The Check Block)
+-- ============================================================================
+🔥 check CriticalFileIntegrityMonitor
+  
+  -- Trigger Gate: Intercepts an EDR alert that a file has been modified on disk
+  ⚠️ when file_modification_detected
+    
+    🔹 set modified_file = event.file_path
+    🔹 set modifying_user = event.actor
+    
+    -- Gate: We only care if the modified file is our critical asset
+    ⚠️ when modified_file == CRITICAL_CONFIG_PATH
+      
+      -- Execute the cryptographic check
+      🔹 set hash_match = check_file_tampering(modified_file, KNOWN_GOOD_HASH)
+
+      -- Gate: If the hash is false, the file was tampered with!
+      ⚠️ when hash_match == false
+        
+        🚨 alert critical message "TAMPERING DETECTED: {modified_file} hash mismatch! Unauthorized modification by {modifying_user}."
+
+        -- ============================================================================
+        -- 5. THE KINETIC ZONE (do ... end)
+        -- ============================================================================
+        ⚡ do
+          
+          -- Action 1: Quarantine the tampered file immediately so the service cannot read the injected backdoor
+          ☁️ edr quarantine file modified_file
+          
+          -- Action 2: Trigger a critical page to the platform security team
+          📡 pager trigger message "CRITICAL: Edge router config tampered with. Hash mismatch detected. File quarantined."
+          
+          -- ============================================================================
+          -- 6. EVIDENCE & PROOF
+          -- ============================================================================
+          📝 evidence record "Config_Tampering_Prevented" details {
+            file: modified_file,
+            actor: modifying_user,
+            expected_hash: KNOWN_GOOD_HASH,
+            actual_hash: event.current_hash,
+            integrity_verified: false,
+            action: "QUARANTINED"
+          }
+          
+          ⛓️ rosecoin anchor evidence_pack "latest"
+          
+        🔴 end
+        
+      -- Fallback: What if the file was modified, but the hash matches? 
+      -- (e.g., someone touched the file but didn't change the contents)
+      ⭕️ otherwise
+        
+        🚨 alert info message "Modification event on {modified_file}, but cryptographic hash verified successfully. No tampering detected."
+        
+      🔴 end
+      
+    🔴 end
+  🔴 end
+🔴 end

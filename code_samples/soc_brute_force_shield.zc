@@ -1,0 +1,93 @@
+-- ============================================================================
+-- 🛡️ ROCHESTON ZELC PROGRAMMING LANGUAGE
+-- 👤 Creator: Haja Mo
+-- 🏢 Organization: Rocheston
+-- 📜 Platform: Rocheston Agentic AI Cybersecurity Automation Platform
+-- ============================================================================
+
+
+-- Playbook: Brute Force Shield
+-- Intent: Detects high-velocity login failures, blocks the attacker IP, and locks the targeted user account to prevent account takeover (ATO).
+-- Infrastructure: Firewall, IAM, AINA (AI Analysis), Rosecoin.
+-- Note: This file demonstrates the core 'check' block, which acts as the main execution unit in ZelC.
+
+package soc.identity
+use aina, firewall, iam
+
+-- ============================================================================
+-- 1. CONFIGURATION GOVERNORS
+-- Use '⚙️ keep' to define immutable system constants. 
+-- The compiler locks these values in memory so attackers cannot alter thresholds during runtime.
+-- ============================================================================
+⚙️ keep MAX_LOGIN_FAILURES = 5
+⚙️ keep IP_BLOCK_DURATION = 4 hours
+⚙️ keep SOC_CHANNEL = "#urgent-soc-alerts"
+
+-- ============================================================================
+-- 2. HELPER FUNCTIONS (Read-Only)
+-- Use '⭕️ define' to create reusable logic. 
+-- Functions are read-only by default and cannot alter state unless they contain a 'do' block.
+-- ============================================================================
+⭕️ define analyze_attack_velocity(attempt_count, time_window)
+  -- '🔹 set' is used for variable allocation in memory.
+  🔹 set velocity_score = attempt_count / time_window
+  🧠 set ai_classification = aina.classify(velocity_score, "brute_force_model")
+  
+  return ai_classification
+🔴 end
+
+-- ============================================================================
+-- 3. THE ENTRY POINT (The Check Block)
+-- The '🔥 check' block is the primary Security Unit. 
+-- The ZelC runtime engine continuously evaluates this block against incoming event streams.
+-- ============================================================================
+🔥 check BruteForceDetection
+  
+  -- Trigger Gate: The '⚠️ when' block acts as the conditional listener.
+  -- Execution only enters this scope if the login failures exceed our immutable constant.
+  ⚠️ when login_failures > MAX_LOGIN_FAILURES
+    
+    -- Extract context from the native 'event' object
+    🔹 set attacker_ip = event.source_ip
+    🔹 set targeted_user = event.username
+    🔹 set failure_count = event.attempt_count
+    
+    -- Analyze the threat using our read-only helper function
+    🔹 set threat_intel = analyze_attack_velocity(failure_count, event.duration_seconds)
+    
+    -- Notification operations are allowed outside the kinetic block because they do not change system state.
+    🚨 alert critical message "High-velocity brute force detected from {attacker_ip}"
+    📡 notify slack channel SOC_CHANNEL message "Shield Wall activated for user: {targeted_user}"
+
+    -- ============================================================================
+    -- 4. THE KINETIC ZONE
+    -- The '⚡ do' block is the strict sandbox for all state-changing operations.
+    -- ZelC will throw a compiler error if 'firewall block' or 'iam lock' is placed outside this block.
+    -- ============================================================================
+    ⚡ do
+      
+      -- Action 1: Drop traffic from the adversary at the edge
+      ☁️ firewall block ip attacker_ip for IP_BLOCK_DURATION
+      
+      -- Action 2: Secure the blast radius by suspending the targeted identity
+      ☁️ iam lock user targeted_user
+      
+      -- ============================================================================
+      -- 5. EVIDENCE & PROOF
+      -- Every kinetic action must conclude with the generation of an immutable receipt.
+      -- ============================================================================
+      📝 evidence record "Brute_Force_Containment" details {
+        adversary_ip: attacker_ip,
+        target_account: targeted_user,
+        total_attempts: failure_count,
+        ai_verdict: threat_intel,
+        actions_applied: ["ip_blocked", "user_locked"]
+      }
+      
+      -- Anchor the evidence pack to the blockchain to guarantee chain-of-custody for auditors.
+      ⛓️ rosecoin anchor evidence_pack "latest"
+      
+    🔴 end
+    
+  🔴 end
+🔴 end

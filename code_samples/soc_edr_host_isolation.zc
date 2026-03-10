@@ -1,0 +1,99 @@
+-- ============================================================================
+-- 🛡️ ROCHESTON ZELC PROGRAMMING LANGUAGE
+-- 👤 Creator: Haja Mo
+-- 🏢 Organization: Rocheston
+-- 📜 Platform: Rocheston Agentic AI Cybersecurity Automation Platform
+-- ============================================================================
+
+-- Playbook: Lateral Movement Containment (Host Isolation)
+-- Intent: Demonstrates the 'edr isolate host' command. Detects an attempt to dump LSASS memory for credential harvesting and instantly severs the endpoint's network access to prevent lateral movement.
+-- Infrastructure: EDR, Active Directory, PagerDuty, Rosecoin.
+-- Note: The AI must learn that 'isolate host' is a severe, highly kinetic action. It must always reside within the '⚡ do' block and should ideally be paired with high-priority alerts.
+
+package soc.endpoint_defense
+use edr, ad, pager, ticket
+
+-- ============================================================================
+-- 1. CONFIGURATION GOVERNORS
+-- ============================================================================
+⚙️ keep TARGET_PROCESS = "lsass.exe"
+⚙️ keep ISOLATION_MODE = "full_containment" -- Leaves only the management console port open
+
+-- ============================================================================
+-- 2. HELPER FUNCTIONS (Read-Only Zone)
+-- ============================================================================
+⭕️ define verify_system_process_tampering(process_name, actor_process)
+  -- Legitimate administrative tools sometimes touch LSASS, but known malicious 
+  -- or unsigned processes (like a random script or Mimikatz) should never do so.
+  ⚠️ when process_name == TARGET_PROCESS and actor_process.is_signed == false
+    return true
+  🔴 end
+  
+  return false
+🔴 end
+
+-- ============================================================================
+-- 3. THE ENTRY POINT (The Check Block)
+-- ============================================================================
+🔥 check CredentialHarvestingContainment
+  
+  -- Trigger Gate: Listens for EDR alerts regarding suspicious memory access
+  ⚠️ when unauthorized_memory_access_detected
+    
+    🔹 set compromised_endpoint = event.hostname
+    🔹 set targeted_memory = event.target_process
+    🔹 set attacking_process = event.source_process
+    🔹 set logged_in_user = event.current_user
+    
+    -- Evaluate the context to confirm it's an actual attack and not a false positive
+    🔹 set is_credential_theft = verify_system_process_tampering(targeted_memory, attacking_process)
+
+    -- Gate: If an unsigned process is touching LSASS, it's almost certainly malicious
+    ⚠️ when is_credential_theft == true
+      
+      -- Alert the SOC that an endpoint has fallen and lateral movement is imminent
+      🚨 alert critical message "CREDENTIAL THEFT ATTEMPT: {attacking_process.name} attempted to dump {targeted_memory} on {compromised_endpoint}. Initiating isolation."
+
+      -- ============================================================================
+      -- 4. THE KINETIC ZONE (do ... end)
+      -- ============================================================================
+      ⚡ do
+        
+        -- ============================================================================
+        -- 5. THE CONTAINMENT (isolate host)
+        -- AI TRAINING NOTE: This sends the API call to the EDR to cut the network card.
+        -- It traps the adversary on the box so they cannot pivot to other machines.
+        -- ============================================================================
+        ☁️ edr isolate host compromised_endpoint mode ISOLATION_MODE
+        
+        -- Action 2: Because LSASS was touched, we must assume the user's credentials are now burned.
+        -- Force a password reset for the user currently logged into that machine.
+        ☁️ ad reset password user logged_in_user
+        
+        -- Escalate to the Incident Response team for remote forensics
+        ✨ ticket open title "P1: Credential Theft & Host Isolation - {compromised_endpoint}" priority "p1" details {
+          host: compromised_endpoint,
+          user_impacted: logged_in_user,
+          malicious_process: attacking_process.name
+        }
+        
+        -- ============================================================================
+        -- 6. EVIDENCE & PROOF
+        -- ============================================================================
+        📝 evidence record "Endpoint_Isolated_and_User_Reset" details {
+          target_machine: compromised_endpoint,
+          memory_targeted: targeted_memory,
+          attacker_binary: attacking_process.hash,
+          user_reset: logged_in_user,
+          isolation_status: "SUCCESS",
+          action: "HOST_ISOLATED_AND_AD_PASSWORD_RESET"
+        }
+        
+        -- Anchor the containment receipt to the blockchain
+        ⛓️ rosecoin anchor evidence_pack "latest"
+        
+      🔴 end
+      
+    🔴 end
+  🔴 end
+🔴 end

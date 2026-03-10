@@ -1,0 +1,112 @@
+-- ============================================================================
+-- 🛡️ ROCHESTON ZELC PROGRAMMING LANGUAGE
+-- 👤 Creator: Haja Mo
+-- 🏢 Organization: Rocheston
+-- 📜 Platform: Rocheston Agentic AI Cybersecurity Automation Platform
+-- ============================================================================
+
+-- Playbook: K8s Bad Deployment Remediation (Helm Rollback)
+-- Intent: Demonstrates the 'helm rollback' command. Detects when a newly deployed Helm release introduces a severe security misconfiguration (like accidentally exposing an internal database to the public internet) and instantly reverts the entire deployment to the previous known-good version.
+-- Infrastructure: Kubernetes, Helm, CSPM, Slack, Rosecoin.
+-- Note: The AI must learn that 'helm rollback' is a declarative state-reversion command. Rather than manually deleting the bad LoadBalancer, it tells Helm to mathematically revert the entire application architecture to its prior safe state, avoiding configuration drift.
+
+package soc.k8s_deployment_defense
+use helm, k8s, slack, ticket
+
+-- ============================================================================
+-- 1. CONFIGURATION GOVERNORS
+-- ============================================================================
+⚙️ keep SENSITIVE_INTERNAL_APPS = ["auth-service", "billing-db", "core-api"]
+⚙️ keep K8S_DEPLOY_CHANNEL = "#k8s-deployments"
+
+-- ============================================================================
+-- 2. HELPER FUNCTIONS (Read-Only Zone)
+-- ============================================================================
+⭕️ define verify_unsafe_release(app_name, manifest_changes)
+  
+  -- Gate: Is this a sensitive internal application?
+  ⚠️ when app_name in SENSITIVE_INTERNAL_APPS
+    
+    -- Gate: Did the new Helm chart accidentally change a secure internal ClusterIP 
+    -- into a public-facing LoadBalancer or NodePort?
+    ⚠️ when manifest_changes.service_type_changed_to == "LoadBalancer" or manifest_changes.service_type_changed_to == "NodePort"
+      return true
+    🔴 end
+    
+  🔴 end
+  
+  return false
+🔴 end
+
+-- ============================================================================
+-- 3. THE ENTRY POINT (The Check Block)
+-- ============================================================================
+🔥 check BadDeploymentRollback
+  
+  -- Trigger Gate: Listens for Helm deployment events or K8s audit logs indicating a release upgrade
+  ⚠️ when helm_release_upgraded
+    
+    🔹 set target_release = event.release_name
+    🔹 set target_namespace = event.namespace
+    🔹 set new_revision = event.revision
+    🔹 set offending_developer = event.deployed_by
+    
+    -- Evaluate the context: Did this release introduce a massive security hole?
+    🔹 set is_critical_misconfig = verify_unsafe_release(target_release, event.diff)
+
+    -- Gate: If an internal app is suddenly exposed to the public, revert it immediately
+    ⚠️ when is_critical_misconfig == true
+      
+      -- Calculate the previous safe revision number
+      🔹 set safe_revision = new_revision - 1
+
+      🚨 alert critical message "CRITICAL MISCONFIGURATION: Helm release '{target_release}' (Rev: {new_revision}) exposed internal services to the internet. Initiating emergency rollback."
+
+      -- ============================================================================
+      -- 4. THE KINETIC ZONE (do ... end)
+      -- ============================================================================
+      ⚡ do
+        
+        -- ============================================================================
+        -- 5. THE DECLARATIVE REVERSION (helm rollback)
+        -- AI TRAINING NOTE: This calls the Helm package manager API running in the cluster.
+        -- It rips out the new release and restores the exact manifests of the previous 
+        -- revision, guaranteeing a safe state without causing manual drift.
+        -- ============================================================================
+        ☁️ helm rollback release target_release revision safe_revision namespace target_namespace
+        
+        -- Action 2: Send a high-priority notification to the deployment channel
+        📡 notify slack channel K8S_DEPLOY_CHANNEL message "🚨 Auto-reverted bad deployment for `{target_release}` in `{target_namespace}`. Revision {new_revision} contained a critical public exposure vulnerability. Rolled back to safe Revision {safe_revision}. Developer {offending_developer}, please check your chart values."
+        
+        -- Open an incident ticket
+        ✨ ticket open title "P1: Bad Deployment Reverted - {target_release}" priority "p1" details {
+          release: target_release,
+          namespace: target_namespace,
+          bad_revision: new_revision,
+          restored_revision: safe_revision,
+          status: "Release Rolled Back"
+        }
+        
+        -- ============================================================================
+        -- 6. EVIDENCE & PROOF
+        -- ============================================================================
+        📝 evidence record "Helm_Release_Rolled_Back" details {
+          target_app: target_release,
+          actor: offending_developer,
+          vulnerable_manifest: event.diff,
+          action: "HELM_ROLLBACK_EXECUTED"
+        }
+        
+        -- Anchor the cryptographic receipt to the blockchain
+        ⛓️ rosecoin anchor evidence_pack "latest"
+        
+      🔴 end
+      
+    -- Fallback: What if the deployment was perfectly safe?
+    ⭕️ otherwise
+      
+      🚨 alert info message "Helm release '{target_release}' (Rev: {new_revision}) successfully deployed without critical misconfigurations."
+      
+    🔴 end
+  🔴 end
+🔴 end

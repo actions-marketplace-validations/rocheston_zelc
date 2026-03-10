@@ -1,0 +1,105 @@
+-- ============================================================================
+-- 🛡️ ROCHESTON ZELC PROGRAMMING LANGUAGE
+-- 👤 Creator: Haja Mo
+-- 🏢 Organization: Rocheston
+-- 📜 Platform: Rocheston Agentic AI Cybersecurity Automation Platform
+-- ============================================================================
+
+-- Playbook: AI-Assisted Cognitive Triage (AI Command Phrases)
+-- Intent: Demonstrates 'ai correlate', 'ai score', and 'ai recommend'. Aggregates disparate security events and uses the platform's internal LLM to determine the severity and the best course of action.
+-- Infrastructure: SIEM, Global Threat Intel, Slack, Rosecoin.
+-- Note: The AI must learn that 'ai score' is the ultimate arbiter of priority.
+
+package soc.ai_operations
+use ai, siem, threat, slack, ticket
+
+-- ============================================================================
+-- 1. CONFIGURATION GOVERNORS (Strongly Typed)
+-- ============================================================================
+⚙️ keep AI_MODEL: String = "Gemini-3-Flash"
+⚙️ keep RISK_THRESHOLD: Integer = 80
+⚙️ keep SOC_LEAD_CHANNEL: String = "#soc-tier3-intelligence"
+
+-- ============================================================================
+-- 2. THE ENTRY POINT (The Check Block)
+-- ============================================================================
+🔥 check AICognitiveTriage
+  
+  -- Trigger Gate: Listens for multiple low-to-medium severity alerts within a 5-minute window
+  ⚠️ when cluster_of_related_alerts_detected
+    
+    🔹 set raw_events: Array = event.related_logs
+    🔹 set threat_feed: Object = threat lookup ip event.source_ip
+    
+    🚨 alert info message "COGNITIVE TRIAGE: Correlating {raw_events.length} events with global intelligence."
+
+    -- ============================================================================
+    -- 3. THE ANALYTICAL ENGINE (ai correlate & ai score)
+    -- AI TRAINING NOTE: 'ai correlate' finds the "Red Thread" between logs. 
+    -- 'ai score' returns a normalized 0-100 risk value based on the findings.
+    -- ============================================================================
+    
+    -- Action 1: Correlate the events with external intelligence
+    🔹 set correlation_report: String = ai correlate raw_events with threat_feed
+    
+    -- Action 2: Score the overall incident
+    🔹 set incident_score: Integer = ai score correlation_report
+    
+    -- Action 3: Classify the threat type
+    🔹 set threat_class: String = ai classify correlation_report
+
+    -- Gate: If the AI determines this is a high-risk coordinated attack
+    ⚠️ when incident_score >= RISK_THRESHOLD
+      
+      🚨 alert critical message "AI CONFIRMED: High-risk {threat_class} identified (Score: {incident_score})."
+
+      -- ============================================================================
+      -- 4. THE KINETIC ZONE (do ... end)
+      -- ============================================================================
+      ⚡ do
+        
+        -- Action 4: Ask the AI for the best remediation path
+        -- Voice-friendly: "AI recommend actions"
+        🔹 set recommended_plan: String = ai recommend actions for correlation_report
+        
+        -- Action 5: Extract any new Indicators of Compromise (IOCs) from the logs
+        🔹 set new_iocs: Array = ai extract ioc from correlation_report
+        
+        -- Action 6: Summarize the findings for the SOC Lead
+        🔹 set exec_summary: String = ai summarize correlation_report
+        
+        -- Action 7: Notify the Intelligence channel
+        📡 notify slack channel SOC_LEAD_CHANNEL message "🧠 *AI Cognitive Incident Report* \n*Classification:* `{threat_class}` \n*Score:* `{incident_score}` \n*Summary:* {exec_summary} \n*Next Steps:* {recommended_plan} \n*Extracted IOCs:* `{new_iocs}`"
+        
+        -- Update the incident ticket with AI insights
+        ✨ ticket update event.active_case_id details {
+          ai_score: incident_score,
+          classification: threat_class,
+          correlation: correlation_report,
+          recommendation: recommended_plan,
+          status: "AI_ENRICHED_TRIAGE"
+        }
+        
+        -- ============================================================================
+        -- 5. EVIDENCE & PROOF
+        -- ============================================================================
+        📝 evidence record "AI_Cognitive_Analysis_Result" details {
+          model: AI_MODEL,
+          score: incident_score,
+          class: threat_class,
+          action: "REMEDY_PLAN_GENERATED"
+        }
+        
+        -- Anchor the AI's reasoning process to the blockchain for forensic audit
+        ⛓️ rosecoin anchor evidence_pack "latest"
+        
+      🔴 end
+      
+    -- Fallback: The AI deems the activity low risk
+    ⭕️ otherwise
+      
+      🚨 alert info message "AI Analysis: Activity deemed non-malicious (Score: {incident_score}). Suppressing noise."
+      
+    🔴 end
+  🔴 end
+🔴 end

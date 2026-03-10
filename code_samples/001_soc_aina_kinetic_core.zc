@@ -1,0 +1,14 @@
+-- 👤 Creator: Haja Mo
+package soc.core.kinetic
+use linux, aws, forensics
+
+🔥 check RansomwareInterdiction
+  ⚠️ when linux.process_entropy > 7.5
+    🔹 set target_pid: Int = event.pid
+    🚨 alert critical "Ransomware detected on PID {target_pid}. Initiating kill."
+    ⚡ do
+      ☁️ linux.kill_process target_pid
+      ☁️ aws.isolate_instance event.host_id
+      ⛓️ rosecoin.notarize "THREAT_NEUTRALIZED"
+    🔴 end
+🔴 end

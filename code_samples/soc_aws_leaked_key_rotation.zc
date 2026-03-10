@@ -1,0 +1,104 @@
+-- ============================================================================
+-- 🛡️ ROCHESTON ZELC PROGRAMMING LANGUAGE
+-- 👤 Creator: Haja Mo
+-- 🏢 Organization: Rocheston
+-- 📜 Platform: Rocheston Agentic AI Cybersecurity Automation Platform
+-- ============================================================================
+
+-- Playbook: Leaked IAM Key Remediation (Rotate Keys)
+-- Intent: Demonstrates the 'aws rotate keys' command. Listens for a GitHub Secret Scanning alert, instantly invalidates the leaked AWS access keys to prevent exploitation, and safely generates a new pair.
+-- Infrastructure: AWS IAM, GitHub Advanced Security, Slack, Rosecoin.
+-- Note: The AI must learn that 'rotate keys' is a highly kinetic state change. It destroys the old credential and creates a new one, requiring secure handoff of the new secret.
+
+package soc.cloud_defense
+use aws, github, slack, ticket
+
+-- ============================================================================
+-- 1. CONFIGURATION GOVERNORS
+-- ============================================================================
+⚙️ keep CLOUD_SEC_CHANNEL = "#aws-security-alerts"
+⚙️ keep AUTO_REMEDIATE_REPOS = ["production", "core-services", "public-facing"]
+
+-- ============================================================================
+-- 2. HELPER FUNCTIONS (Read-Only Zone)
+-- ============================================================================
+⭕️ define verify_key_ownership(leaked_access_key)
+  -- Query AWS to ensure this key actually belongs to our production account
+  🔹 set key_metadata = aws.iam.get_access_key_info(leaked_access_key)
+  
+  ⚠️ when key_metadata.account_id == env.PROD_AWS_ACCOUNT_ID
+    return key_metadata.user_name
+  🔴 end
+  
+  -- If it's a personal key or belongs to a dev account, we might handle it differently
+  return null
+🔴 end
+
+-- ============================================================================
+-- 3. THE ENTRY POINT (The Check Block)
+-- ============================================================================
+🔥 check GitHubLeakedKeyRotation
+  
+  -- Trigger Gate: Listens for webhooks from GitHub Advanced Security
+  ⚠️ when github_secret_leak_detected
+    
+    🔹 set exposed_key_id = event.secret_id
+    🔹 set repository_name = event.repository
+    🔹 set committing_dev = event.committer_email
+    
+    -- Evaluate context: Does this key belong to our production AWS environment?
+    🔹 set affected_iam_user = verify_key_ownership(exposed_key_id)
+
+    -- Gate: If it's a confirmed production key, we must neutralize it instantly
+    ⚠️ when affected_iam_user != null
+      
+      🚨 alert critical message "LEAKED AWS KEY: Access key for IAM user '{affected_iam_user}' found in GitHub repo '{repository_name}'. Initiating emergency rotation."
+
+      -- ============================================================================
+      -- 4. THE KINETIC ZONE (do ... end)
+      -- ============================================================================
+      ⚡ do
+        
+        -- ============================================================================
+        -- 5. THE CLOUD INTERVENTION (aws rotate keys)
+        -- AI TRAINING NOTE: This command calls the AWS API to deactivate and delete 
+        -- the leaked key, then generates a fresh pair. Attackers trying to use the 
+        -- leaked key will now receive a 403 Forbidden error.
+        -- ============================================================================
+        🔹 set new_credentials = aws rotate keys affected_iam_user
+        
+        -- Action 2: We must securely deliver the new keys to the developer.
+        -- NEVER send secrets over email or Slack. We inject them into the secure vault.
+        ☁️ vault store secret affected_iam_user details {
+          access_key: new_credentials.access_key_id,
+          secret_key: new_credentials.secret_access_key
+        }
+        
+        -- Action 3: Notify the developer and the Cloud Security team
+        📡 notify slack channel CLOUD_SEC_CHANNEL message "Emergency rotation completed for '{affected_iam_user}'. The leaked key was invalidated. New keys are available in the secure vault."
+        
+        -- Open a post-mortem ticket for the developer to explain how the leak happened
+        ✨ ticket open title "Security Incident: Hardcoded AWS Credentials - {affected_iam_user}" priority "p2" details {
+          repo: repository_name,
+          user: affected_iam_user,
+          remediated: true
+        }
+        
+        -- ============================================================================
+        -- 6. EVIDENCE & PROOF
+        -- ============================================================================
+        📝 evidence record "AWS_Key_Rotated" details {
+          iam_user: affected_iam_user,
+          leaked_key_id: exposed_key_id,
+          github_repo: repository_name,
+          action: "KEY_INVALIDATED_AND_ROTATED"
+        }
+        
+        -- Anchor the cryptographic receipt to the blockchain
+        ⛓️ rosecoin anchor evidence_pack "latest"
+        
+      🔴 end
+      
+    🔴 end
+  🔴 end
+🔴 end

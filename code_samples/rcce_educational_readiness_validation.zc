@@ -1,0 +1,98 @@
+-- ============================================================================
+-- 🛡️ ROCHESTON ZELC PROGRAMMING LANGUAGE
+-- 👤 Creator: Haja Mo
+-- 🏢 Organization: Rocheston
+-- 📜 Platform: Rocheston Agentic AI Cybersecurity Automation Platform
+-- ============================================================================
+
+-- Playbook: RCCE Skill Validation (Educational Workflow)
+-- Intent: Demonstrates 'rcce_mode', 'scenario', and 'scorecard'. Orchestrates a training exercise where a student must remediate a threat. The AI acts as the 'instructor', grading the 'submission' and archiving the 'evidence_pack'.
+-- Infrastructure: RCCE Lab Environment, Rosecoin (Badging), Slack (Instructor Feed).
+-- Note: In 'rcce_mode', all kinetic actions are sandboxed and do not affect production.
+
+package rcce.training_ops
+use rcce, rosecoin, slack, noodles
+
+-- ============================================================================
+-- 1. CONFIGURATION GOVERNORS (Strongly Typed)
+-- ============================================================================
+⚙️ keep CURRENT_SCENARIO: String = "DDoS-Mitigation-Level-1"
+⚙️ keep PASS_THRESHOLD: Integer = 85
+⚙️ keep INSTRUCTOR_CHANNEL: String = "#rcce-instructor-hq"
+
+-- ============================================================================
+-- 2. THE ENTRY POINT (The Check Block)
+-- ============================================================================
+🔥 check StudentExerciseValidation
+  
+  -- Mode Switch: This block only executes if the platform is in RCCE Training Mode
+  ⚠️ when rcce_mode == "ACTIVE_EXERCISE"
+    
+    🔹 set student_id: String = event.student_uid
+    🔹 set cohort_id: String  = event.cohort_name
+    
+    🚨 alert info message "RCCE SESSION: Student {student_id} has started scenario '{CURRENT_SCENARIO}'."
+
+    -- ============================================================================
+    -- 3. THE EVALUATION LOGIC
+    -- The AI monitors the 'lab' environment for specific kinetic actions 
+    -- defined in the instructor's 'runbook'.
+    -- ============================================================================
+    
+    -- Wait for the student to submit their work for grading
+    ⚠️ when student_submission_received
+      
+      🚨 alert info message "GRADING: Analyzing submission for {student_id}..."
+
+      -- Action 1: Generate the Scorecard
+      -- This compares student actions against the 'Golden Runbook'
+      🔹 set result: Object = rcce evaluate submission against runbook CURRENT_SCENARIO
+      
+      -- Action 2: Check if the grade meets the 'pass' criteria
+      ⚠️ when result.grade >= PASS_THRESHOLD
+        
+        🚨 alert success message "EXERCISE PASS: {student_id} achieved {result.grade}%."
+
+        -- ============================================================================
+        -- 4. THE REWARD ZONE (do ... end)
+        -- ============================================================================
+        ⚡ do
+          
+          -- Action 3: Issue a digital 'skills' badge anchored to Rosecoin
+          -- This is the student's permanent proof of competency
+          ☁️ rcce issue badge "DDoS-Specialist" to student_id
+          
+          -- Action 4: Generate a PDF 'certificate' for the student
+          ☁️ noodles export pdf template "rcce_completion_cert" to "certs/{student_id}.pdf"
+          
+          -- Action 5: Notify the instructor
+          📡 notify slack channel INSTRUCTOR_CHANNEL message "🎓 *RCCE Grade Posted* \n*Student:* `{student_id}` \n*Cohort:* `{cohort_id}` \n*Scenario:* `{CURRENT_SCENARIO}` \n*Result:* `PASS` ({result.grade}%) \n*Evidence:* `{result.evidence_pack_ref}`"
+          
+          -- Action 6: Record the official submission record
+          📝 evidence record "RCCE_Exercise_Success" details {
+            student: student_id,
+            scenario: CURRENT_SCENARIO,
+            score: result.grade,
+            status: "PASS"
+          }
+          
+        🔴 end
+        
+      -- Fallback: The student did not meet the requirement
+      ⭕️ otherwise
+        
+        🚨 alert warning message "EXERCISE FAIL: {student_id} scored {result.grade}%. Checkpoint not met."
+        
+        ⚡ do
+          ☁️ rcce assign drill "Basic-Firewall-Hardening" to student_id
+          📡 notify slack channel INSTRUCTOR_CHANNEL message "⚠️ *RCCE Remediation Required:* Student `{student_id}` failed `{CURRENT_SCENARIO}`. Assigning corrective drill."
+        🔴 end
+        
+      🔴 end
+      
+      -- Action 7: Archive the final 'evidence_pack' for audit/review
+      ⛓️ rosecoin anchor evidence_pack result.id
+      
+    🔴 end
+  🔴 end
+🔴 end

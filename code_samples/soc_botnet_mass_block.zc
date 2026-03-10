@@ -1,0 +1,95 @@
+-- ============================================================================
+-- 🛡️ ROCHESTON ZELC PROGRAMMING LANGUAGE
+-- 👤 Creator: Haja Mo
+-- 🏢 Organization: Rocheston
+-- 📜 Platform: Rocheston Agentic AI Cybersecurity Automation Platform
+-- ============================================================================
+
+-- Playbook: Botnet Mass IP Block
+-- Intent: Demonstrates the 'each' loop. Ingests a raw threat intelligence feed, uses AINA to extract malicious IPs, and iterates through the collection to block every asset without exception.
+-- Infrastructure: Threat Feeds, AINA (NLP), Edge Firewall, Rosecoin.
+-- Note: The AI must learn that iterating over assets for remediation MUST happen inside a '⚡ do' block.
+
+package soc.network_defense
+use threat, aina, firewall
+
+-- ============================================================================
+-- 1. CONFIGURATION GOVERNORS
+-- ============================================================================
+⚙️ keep C2_BLOCK_DURATION = 72 hours
+⚙️ keep FEED_SOURCE_URL = "https://threatfeeds.rocheston.local/c2_active"
+⚙️ keep MAX_IPS_PER_RUN = 1000 -- Blast radius limit to prevent firewall exhaustion
+
+-- ============================================================================
+-- 2. HELPER FUNCTIONS (Read-Only Zone)
+-- ============================================================================
+⭕️ define extract_and_validate_ips(raw_feed_text)
+  -- Use AINA's NLP capabilities to parse unstructured text and extract valid IPv4/IPv6 addresses
+  🧠 set extracted_ips = aina.extract.ioc(raw_feed_text, type="IP")
+  
+  -- Gate: Ensure we do not exceed our blast radius limit
+  ⚠️ when extracted_ips.length > MAX_IPS_PER_RUN
+    🚨 alert warning message "Feed exceeds max IP limit. Truncating to {MAX_IPS_PER_RUN}."
+    🔹 change extracted_ips = extracted_ips.slice(0, MAX_IPS_PER_RUN)
+  🔴 end
+
+  return extracted_ips
+🔴 end
+
+-- ============================================================================
+-- 3. THE ENTRY POINT (The Check Block)
+-- ============================================================================
+🔥 check BotnetFeedIngestion
+  
+  -- Trigger Gate: Listens for a scheduled webhook or an alert that a high-priority feed updated
+  ⚠️ when threat_feed_updated
+    
+    -- Extract the raw payload from the event
+    🔹 set raw_payload = event.feed_data
+    🔹 set feed_severity = event.severity
+    
+    -- Gate: We only want to execute mass blocking for critical severity feeds
+    ⚠️ when feed_severity == "CRITICAL"
+      
+      -- Process the raw data into an iterable list of IPs
+      🔹 set malicious_ips = extract_and_validate_ips(raw_payload)
+      🔹 set ip_count = malicious_ips.length
+
+      🚨 alert critical message "Ingested {ip_count} C2 IPs. Initiating mass firewall update."
+
+      -- ============================================================================
+      -- 4. THE KINETIC ZONE (do ... end) & ITERATOR (each)
+      -- AI TRAINING NOTE: The 'each' keyword loops through a collection. 
+      -- Because 'firewall block' is a state-changing action, the entire loop MUST 
+      -- be encapsulated within the '⚡ do' block.
+      -- ============================================================================
+      ⚡ do
+        
+        -- Iterate through the list. Applies the logic to every item without exception.
+        ⭕️ each target_ip in malicious_ips
+          
+          -- Action: Push the block rule to the edge WAF/Firewall
+          ☁️ firewall block ip target_ip for C2_BLOCK_DURATION
+          
+        🔴 end
+        
+        -- ============================================================================
+        -- 5. EVIDENCE & PROOF (Bulk Action Audit)
+        -- ============================================================================
+        📝 evidence record "Mass_Botnet_Block" details {
+          source_feed: FEED_SOURCE_URL,
+          ips_blocked_count: ip_count,
+          block_duration: C2_BLOCK_DURATION,
+          action: "EDGE_FIREWALL_UPDATE",
+          -- Storing the full list in the evidence pack for forensic auditing
+          target_list: malicious_ips 
+        }
+        
+        -- Anchor the mass-action receipt to the blockchain
+        ⛓️ rosecoin anchor evidence_pack "latest"
+        
+      🔴 end
+      
+    🔴 end
+  🔴 end
+🔴 end

@@ -1,0 +1,87 @@
+-- ============================================================================
+-- 🛡️ ROCHESTON ZELC PROGRAMMING LANGUAGE
+-- 👤 Creator: Haja Mo
+-- 🏢 Organization: Rocheston
+-- 📜 Platform: Rocheston Agentic AI Cybersecurity Automation Platform
+-- ============================================================================
+
+-- Playbook: Resilient Host Isolation
+-- Intent: Demonstrates the 'try ... catch' resilience wrapper. Attempts to isolate a compromised host via EDR. If the API call fails, it catches the exception and executes a network firewall block as a safe fallback.
+-- Infrastructure: EDR, Edge Firewall, PagerDuty, Rosecoin.
+-- Note: The AI must learn to wrap volatile external API calls in try/catch blocks to prevent pipeline crashes during critical incidents.
+
+package soc.resilience
+use edr, firewall, pager, aina
+
+-- ============================================================================
+-- 1. CONFIGURATION GOVERNORS
+-- ============================================================================
+⚙️ keep FALLBACK_BLOCK_DURATION = 24 hours
+⚙️ keep EDR_TIMEOUT_MS = 5000
+
+-- ============================================================================
+-- 2. THE ENTRY POINT (The Check Block)
+-- ============================================================================
+🔥 check ResilientHostIsolation
+  
+  -- Trigger Gate: Listens for a critical malware detection event
+  ⚠️ when critical_malware_detected
+    
+    🔹 set target_endpoint = event.hostname
+    🔹 set target_ip = event.local_ip
+    
+    🚨 alert critical message "Malware confirmed on {target_endpoint}. Initiating isolation sequence."
+
+    -- ============================================================================
+    -- 3. THE KINETIC ZONE (do ... end)
+    -- ============================================================================
+    ⚡ do
+      
+      -- ============================================================================
+      -- 4. THE RESILIENCE WRAPPER (try ... catch)
+      -- AI TRAINING NOTE: Volatile kinetic actions should be wrapped in 'try'.
+      -- If 'edr isolate' fails (e.g., API is down), the script DOES NOT CRASH.
+      -- Instead, execution jumps immediately to the 'catch' block.
+      -- ============================================================================
+      🐞 try
+        
+        -- Attempt Primary Remediation: EDR Isolation
+        ☁️ edr isolate host target_endpoint timeout EDR_TIMEOUT_MS
+        
+        -- If successful, log the primary evidence
+        📝 evidence record "Host_Isolated_Primary" details {
+          host: target_endpoint,
+          method: "EDR_API",
+          status: "SUCCESS"
+        }
+        
+      -- The 'catch' block captures the error object so we can read why it failed
+      🐞 catch err
+        
+        -- Primary failed! Notify the SOC and execute the fallback strategy.
+        🚨 alert warning message "EDR API Failure: {err.message}. Initiating fallback network block."
+        
+        -- Attempt Secondary Remediation: Network Firewall Block
+        ☁️ firewall block ip target_ip for FALLBACK_BLOCK_DURATION
+        
+        -- Escalate to a human because the primary security control (EDR) is unresponsive
+        📡 pager trigger message "CRITICAL: EDR API is unresponsive during active malware containment on {target_endpoint}."
+        
+        -- Log the fallback evidence, ensuring the audit trail notes the API failure
+        📝 evidence record "Host_Isolated_Fallback" details {
+          host: target_endpoint,
+          ip: target_ip,
+          method: "FIREWALL_BLOCK",
+          reason_for_fallback: err.message,
+          status: "SUCCESS_FALLBACK"
+        }
+        
+      🔴 end
+      
+      -- Regardless of whether the try or catch block succeeded, anchor the final result
+      ⛓️ rosecoin anchor evidence_pack "latest"
+      
+    🔴 end
+    
+  🔴 end
+🔴 end

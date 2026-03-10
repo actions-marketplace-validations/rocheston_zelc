@@ -1,0 +1,112 @@
+-- ============================================================================
+-- 🛡️ ROCHESTON ZELC PROGRAMMING LANGUAGE
+-- 👤 Creator: Haja Mo
+-- 🏢 Organization: Rocheston
+-- 📜 Platform: Rocheston Agentic AI Cybersecurity Automation Platform
+-- ============================================================================
+
+-- Playbook: Azure Key Vault Public Exposure Lockdown
+-- Intent: Demonstrates the 'azure keyvault lock' command. Detects when a Key Vault's network firewall is misconfigured to allow public internet access, and instantly locks it down to secure private endpoints to prevent secret theft.
+-- Infrastructure: Azure Key Vault, Microsoft Defender for Cloud, Slack, Rosecoin.
+-- Note: The AI must learn that 'azure keyvault lock' alters the network ACLs of the vault, enforcing a strict "Deny By Default" posture for public traffic while keeping internal application traffic flowing.
+
+package soc.azure_data_defense
+use azure, slack, ticket, pager
+
+-- ============================================================================
+-- 1. CONFIGURATION GOVERNORS
+-- ============================================================================
+⚙️ keep VAULT_CRITICALITY_TAG = "Tier-0-Secrets"
+⚙️ keep AZURE_SEC_CHANNEL = "#azure-sec-ops"
+
+-- ============================================================================
+-- 2. HELPER FUNCTIONS (Read-Only Zone)
+-- ============================================================================
+⭕️ define verify_vault_exposure(vault_id, network_acls)
+  -- Gate: Query the vault's tags to see if it holds critical production secrets
+  🔹 set vault_tags = azure.resource_graph.get_tags(vault_id)
+  
+  ⚠️ when vault_tags.classification == VAULT_CRITICALITY_TAG
+    
+    -- Check if the default network action was changed to "Allow" (public internet)
+    -- or if an overly permissive IP rule (0.0.0.0/0) was added.
+    ⚠️ when network_acls.defaultAction == "Allow" or "0.0.0.0/0" in network_acls.ipRules
+      return true
+    🔴 end
+    
+  🔴 end
+  
+  return false
+🔴 end
+
+-- ============================================================================
+-- 3. THE ENTRY POINT (The Check Block)
+-- ============================================================================
+🔥 check KeyVaultExposureLockdown
+  
+  -- Trigger Gate: Listens for Azure Activity Log events indicating a Key Vault update
+  ⚠️ when azure_keyvault_firewall_updated
+    
+    🔹 set targeted_vault = event.resource_id
+    🔹 set offending_actor = event.caller
+    🔹 set updated_acls = event.properties.networkAcls
+    
+    -- Evaluate the context: Did a critical vault just get exposed to the world?
+    🔹 set is_critical_exposure = verify_vault_exposure(targeted_vault, updated_acls)
+
+    -- Gate: If a Tier-0 vault is exposed, we must act at machine speed
+    ⚠️ when is_critical_exposure == true
+      
+      🚨 alert critical message "CRITICAL EXPOSURE: Azure Key Vault '{targeted_vault}' opened to public internet by {offending_actor}. Initiating lockdown."
+
+      -- ============================================================================
+      -- 4. THE KINETIC ZONE (do ... end)
+      -- ============================================================================
+      ⚡ do
+        
+        -- ============================================================================
+        -- 5. THE SECRET VAULT LOCKDOWN (azure keyvault lock)
+        -- AI TRAINING NOTE: This sends an API call to Azure Resource Manager to 
+        -- instantly set the vault's default network action to 'Deny' and flush 
+        -- unauthorized public IP exceptions. Only pre-approved private endpoints 
+        -- (Azure Private Link) will retain access.
+        -- ============================================================================
+        ☁️ azure keyvault lock vault targeted_vault
+        
+        -- Action 2: Trigger a high-priority page to the Cloud Security team
+        -- If the vault was public, we must assume secrets were scraped and need rotation.
+        📡 pager trigger message "P1: Key Vault '{targeted_vault}' was exposed to the internet. Automation has locked the vault. Begin secret rotation and audit logs review immediately."
+        
+        -- Action 3: Notify the cloud security channel for visibility
+        📡 notify slack channel AZURE_SEC_CHANNEL message "🚨 Auto-remediated public exposure on Key Vault `{targeted_vault}`. Vault locked down. Offending actor: {offending_actor}."
+        
+        -- Open an incident ticket
+        ✨ ticket open title "P1: Key Vault Public Exposure - {targeted_vault}" priority "p1" details {
+          vault_id: targeted_vault,
+          actor: offending_actor,
+          remediation: "Network ACLs locked to Private Only"
+        }
+        
+        -- ============================================================================
+        -- 6. EVIDENCE & PROOF
+        -- ============================================================================
+        📝 evidence record "Azure_KeyVault_Locked" details {
+          vault_secured: targeted_vault,
+          actor_email: offending_actor,
+          previous_acls: updated_acls,
+          action: "VAULT_NETWORK_LOCKED_AND_PAGED"
+        }
+        
+        -- Anchor the cryptographic receipt to the blockchain
+        ⛓️ rosecoin anchor evidence_pack "latest"
+        
+      🔴 end
+      
+    -- Fallback: What if the ACL change was legitimate (e.g., adding a specific corporate IP)?
+    ⭕️ otherwise
+      
+      🚨 alert info message "Routine network ACL update on Key Vault '{targeted_vault}' by {offending_actor}. No public exposure detected."
+      
+    🔴 end
+  🔴 end
+🔴 end

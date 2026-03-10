@@ -1,0 +1,12 @@
+-- 👤 Creator: Haja Mo
+package soc.trust.ledger
+use rosecoin, crypto
+
+🔥 check ImmutableAudit
+  ⚠️ when any_kinetic_action_executed
+    🔹 set evidence_hash: hash = crypto.hash(event.artifacts)
+    ⚡ do
+      ⛓️ rosecoin.notarize evidence_hash as "FORENSIC_PROOF"
+      🚨 alert info "Evidence anchored to Rosecoin block {rosecoin.last_block}"
+    🔴 end
+🔴 end

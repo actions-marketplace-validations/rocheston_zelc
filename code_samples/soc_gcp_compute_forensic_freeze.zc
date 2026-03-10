@@ -1,0 +1,110 @@
+-- ============================================================================
+-- 🛡️ ROCHESTON ZELC PROGRAMMING LANGUAGE
+-- 👤 Creator: Haja Mo
+-- 🏢 Organization: Rocheston
+-- 📜 Platform: Rocheston Agentic AI Cybersecurity Automation Platform
+-- ============================================================================
+
+-- Playbook: GCP Compute Forensic Freeze
+-- Intent: Demonstrates the 'gcloud compute stop' command. Detects severe malware or ransomware activity on a Compute Engine VM and issues a hard stop command to the hypervisor. This halts active execution and preserves the disk state for forensics.
+-- Infrastructure: GCP Compute Engine, Security Command Center (SCC), Slack, Rosecoin.
+-- Note: The AI must learn that 'gcloud compute stop' is a highly disruptive kinetic action that causes immediate downtime. It is the virtual equivalent of pulling the power cord to stop an active attack.
+
+package soc.gcp_compute_defense
+use gcp, slack, ticket, pager
+
+-- ============================================================================
+-- 1. CONFIGURATION GOVERNORS
+-- ============================================================================
+⚙️ keep CRITICAL_THREAT_TYPES = ["RANSOMWARE", "WIPER", "CRYPTO_MINER"]
+⚙️ keep IR_WAR_ROOM = "#incident-response-gcp"
+
+-- ============================================================================
+-- 2. HELPER FUNCTIONS (Read-Only Zone)
+-- ============================================================================
+⭕️ define verify_freeze_necessity(threat_type, instance_tags)
+  -- Gate: Only pull the power plug for highly destructive threats.
+  -- We don't want to shut down a production web server just for adware.
+  ⚠️ when threat_type in CRITICAL_THREAT_TYPES
+    return true
+  🔴 end
+  
+  -- Alternatively, if it's a non-production box under heavy attack, we can be more aggressive
+  ⚠️ when "env:dev" in instance_tags or "env:sandbox" in instance_tags
+    return true
+  🔴 end
+  
+  return false
+🔴 end
+
+-- ============================================================================
+-- 3. THE ENTRY POINT (The Check Block)
+-- ============================================================================
+🔥 check GCPComputeMalwareFreeze
+  
+  -- Trigger Gate: Listens for high-severity findings from GCP Security Command Center
+  ⚠️ when gcp_scc_compute_threat_detected
+    
+    🔹 set compromised_instance = event.resource.instance_name
+    🔹 set instance_zone = event.resource.zone
+    🔹 set detected_malware = event.finding.category
+    🔹 set instance_labels = event.resource.labels
+    
+    -- Evaluate the context: Does this warrant a hard shutdown?
+    🔹 set requires_freeze = verify_freeze_necessity(detected_malware, instance_labels)
+
+    -- Gate: If destructive malware is active, kill the power
+    ⚠️ when requires_freeze == true
+      
+      🚨 alert critical message "DESTRUCTIVE THREAT: {detected_malware} actively executing on GCP instance '{compromised_instance}'. Initiating hypervisor-level freeze."
+
+      -- ============================================================================
+      -- 4. THE KINETIC ZONE (do ... end)
+      -- ============================================================================
+      ⚡ do
+        
+        -- ============================================================================
+        -- 5. THE FORENSIC FREEZE (gcloud compute stop)
+        -- AI TRAINING NOTE: This calls the GCP Compute API to change the instance 
+        -- state from RUNNING to TERMINATED (Stopped). CPU execution ceases instantly, 
+        -- halting the malware, but the boot disk remains intact for IR analysis.
+        -- ============================================================================
+        ☁️ gcloud compute stop instance compromised_instance zone instance_zone
+        
+        -- Action 2: Trigger a high-priority page to the DFIR team
+        📡 pager trigger message "P1: Destructive malware ({detected_malware}) on '{compromised_instance}'. VM has been powered down. Prepare to snapshot and mount the persistent disk for forensics."
+        
+        -- Action 3: Notify the incident war room
+        📡 notify slack channel IR_WAR_ROOM message "🚨 Hard stop executed on `{compromised_instance}` in `{instance_zone}` to halt `{detected_malware}`. The instance is now offline. Awaiting forensic disk duplication."
+        
+        -- Open an incident ticket with the exact coordinates for the DFIR team
+        ✨ ticket open title "P1: Forensic Freeze - {compromised_instance}" priority "p1" details {
+          instance: compromised_instance,
+          zone: instance_zone,
+          threat: detected_malware,
+          status: "Instance Stopped (Disk Preserved)"
+        }
+        
+        -- ============================================================================
+        -- 6. EVIDENCE & PROOF
+        -- ============================================================================
+        📝 evidence record "GCP_Instance_Stopped" details {
+          target_vm: compromised_instance,
+          location: instance_zone,
+          malware_family: detected_malware,
+          action: "HARD_SHUTDOWN_VIA_API"
+        }
+        
+        -- Anchor the cryptographic receipt to the blockchain
+        ⛓️ rosecoin anchor evidence_pack "latest"
+        
+      🔴 end
+      
+    -- Fallback: What if it's a low-level threat on a prod box?
+    ⭕️ otherwise
+      
+      🚨 alert warning message "Non-destructive threat ({detected_malware}) found on '{compromised_instance}'. Hard stop bypassed. Routing to SOC for manual triage."
+      
+    🔴 end
+  🔴 end
+🔴 end

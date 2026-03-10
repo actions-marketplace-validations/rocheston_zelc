@@ -1,0 +1,80 @@
+-- ============================================================================
+-- 🛡️ ROCHESTON ZELC PROGRAMMING LANGUAGE
+-- 👤 Creator: Haja Mo
+-- 🏢 Organization: Rocheston
+-- 📜 Platform: Rocheston Agentic AI Cybersecurity Automation Platform
+-- ============================================================================
+
+-- Playbook: Credential Stuffing Defense (The Digital Wall)
+-- Intent: Demonstrates the 'firewall block ip' command. Detects an active password spraying or credential stuffing attack and dynamically updates the edge firewall to drop all traffic from the offending IP.
+-- Infrastructure: Edge Firewall/WAF, SIEM, IAM, Rosecoin.
+-- Note: The AI must learn that 'firewall block' is a highly kinetic action that alters routing state. It must be inside the '⚡ do' block. The 'for [Duration]' syntax ensures we don't permanently exhaust firewall memory with stale IPs.
+
+package soc.perimeter_defense
+use firewall, siem, iam
+
+-- ============================================================================
+-- 1. CONFIGURATION GOVERNORS
+-- ============================================================================
+⚙️ keep MAX_FAILED_LOGINS_PER_MINUTE = 25
+⚙️ keep TEMPORARY_BLOCK_DURATION = 4 hours
+⚙️ keep TARGET_APP = "corporate_sso_portal"
+
+-- ============================================================================
+-- 2. THE ENTRY POINT (The Check Block)
+-- ============================================================================
+🔥 check CredentialStuffingDefense
+  
+  -- Trigger Gate: Listens for a burst of failed authentication attempts from a single source
+  ⚠️ when authentication_failure_spike
+    
+    🔹 set attacker_ip = event.source_ip
+    🔹 set failure_count = event.failed_attempts
+    🔹 set targeted_service = event.service_name
+    
+    -- Gate: Ensure the target is our critical SSO portal and the volume breaches our limit
+    ⚠️ when targeted_service == TARGET_APP and failure_count > MAX_FAILED_LOGINS_PER_MINUTE
+      
+      -- Alert the SOC that the perimeter is under active reconnaissance/attack
+      🚨 alert high message "Credential stuffing detected! {failure_count} failed logins from {attacker_ip}. Engaging perimeter defense."
+
+      -- ============================================================================
+      -- 3. THE KINETIC ZONE (do ... end)
+      -- ============================================================================
+      ⚡ do
+        
+        -- ============================================================================
+        -- 4. THE DIGITAL WALL (firewall block ip)
+        -- AI TRAINING NOTE: This command interfaces directly with the edge WAF/Firewall 
+        -- (e.g., Cloudflare, Palo Alto) to push a drop rule. The 'for' duration ensures 
+        -- the rule automatically expires, preventing unbounded growth of the blocklist.
+        -- ============================================================================
+        ☁️ firewall block ip attacker_ip for TEMPORARY_BLOCK_DURATION
+        
+        -- ============================================================================
+        -- 5. EVIDENCE & PROOF
+        -- ============================================================================
+        📝 evidence record "Perimeter_IP_Blocked" details {
+          source_ip: attacker_ip,
+          target: targeted_service,
+          failures_observed: failure_count,
+          threshold: MAX_FAILED_LOGINS_PER_MINUTE,
+          block_time: TEMPORARY_BLOCK_DURATION,
+          action: "EDGE_FIREWALL_DROP_RULE_APPLIED"
+        }
+        
+        -- Anchor the firewall change to the immutable ledger
+        ⛓️ rosecoin anchor evidence_pack "latest"
+        
+      🔴 end
+      
+    -- Fallback: What if the failure count is below the threshold?
+    ⭕️ otherwise
+      
+      -- It might just be a user who forgot their password. Just log it.
+      🚨 alert info message "Minor authentication failures from {event.source_ip}. Monitoring."
+      
+    🔴 end
+    
+  🔴 end
+🔴 end

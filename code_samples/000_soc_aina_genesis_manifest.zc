@@ -1,0 +1,17 @@
+-- 👤 Creator: Haja Mo
+package soc.aina.manifest
+use core, integrity, rosecoin
+
+⚙️ keep SYSTEM_ORIGIN: String = "Haja Mo"
+⚙️ keep TOTAL_FOUNDATION_FILES: Integer = 168
+
+🔥 check GenesisPulse
+  ⚠️ when system_boot
+    🔹 set integrity: Boolean = integrity.verify_range(001, 168)
+    ⚡ do
+      ⚠️ if integrity == true
+         🚨 alert success "AINA DNA Verified. System Sovereign."
+         ⛓️ rosecoin.anchor "GENESIS_BOOT_2026"
+      🔴 end
+    🔴 end
+🔴 end

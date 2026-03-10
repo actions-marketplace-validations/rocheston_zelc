@@ -1,0 +1,109 @@
+-- ============================================================================
+-- 🛡️ ROCHESTON ZELC PROGRAMMING LANGUAGE
+-- 👤 Creator: Haja Mo
+-- 🏢 Organization: Rocheston
+-- 📜 Platform: Rocheston Agentic AI Cybersecurity Automation Platform
+-- ============================================================================
+
+-- Playbook: Attack Surface & Exposure Management (ASM Keywords)
+-- Intent: Demonstrates 'asm', 'shadow_it', 'subdomain', and 'exposure'. 
+-- Automatically discovers and hardens unknown internet-facing assets.
+-- Infrastructure: Zelfire ASM Scanner, Cloud-Discovery-Engine, Risk Register.
+-- Note: 'external_scan' is performed daily to mimic an adversary's reconnaissance.
+
+package soc.asm_ops
+use asm, network, cloud, slack, rosecoin
+
+-- ============================================================================
+-- 1. CONFIGURATION GOVERNORS (Strongly Typed)
+-- ============================================================================
+⚙️ keep SCAN_INTENSITY: String = "THOROUGH"
+⚙️ keep APPROVED_VENDORS: Array = ["AWS", "Azure", "GCP", "Cloudflare"]
+⚙️ keep MAX_EXPOSURE_SCORE: Integer = 70
+
+-- ============================================================================
+-- 2. THE ENTRY POINT (The Check Block)
+-- ============================================================================
+🔥 check AttackSurfaceDiscovery
+  
+  -- Trigger Gate: External ASM scan identifies an 'unknown_asset' or 'subdomain'
+  ⚠️ when unknown_public_endpoint_detected or certificate_expiry_warning
+    
+    🔹 set discovered_asset: asset = event.asset_details
+    🔹 set exposure_point: String = discovered_asset.public_ip
+    🔹 set discovery_source: String = event.source -- e.g., "DNS-Enumeration"
+    
+    🚨 alert warning message "ASM DISCOVERY: New {discovery_source} asset found: {discovered_asset.hostname}. Potential Shadow IT."
+
+    -- ============================================================================
+    -- 3. THE RECONNAISSANCE LAYER (external_scan, service_discovery, port_inventory)
+    -- ============================================================================
+    ⚡ do
+      
+      -- Action 1: Initiate a deep 'external_scan' on the new asset
+      -- Voice-friendly: "ASM deep scan asset..."
+      🔹 set scan_results: Object = asm external_scan discovered_asset intensity SCAN_INTENSITY
+      
+      -- Action 2: Map the 'port_inventory' and perform 'service_discovery'
+      -- Identifies if dangerous ports (22, 3389, 445) are exposed.
+      🔹 set open_ports: Array = asm get_ports for discovered_asset
+      🔹 set services: Array = asm identify_services for discovered_asset
+      
+      ⚠️ if open_ports contains [3389, 445]
+         🚨 alert critical message "CRITICAL EXPOSURE: Management ports exposed on {discovered_asset.hostname}."
+         ☁️ network block_ingress exposure_point -- Immediate shield
+      🔴 end
+
+      -- ============================================================================
+      -- 4. THE INVENTORY & RISK LAYER (shadow_it, dns_inventory, risk_register)
+      -- ============================================================================
+      -- Action 3: Cross-reference with the master 'inventory' to confirm 'shadow_it'
+      -- Voice-friendly: "Verify shadow_it..."
+      🔹 set is_managed: Boolean = asm verify_inventory discovered_asset
+      
+      ⚠️ when is_managed == false
+         🚨 alert critical message "SHADOW IT CONFIRMED: {discovered_asset.hostname} is not in the approved inventory."
+         
+         -- Action 4: Update the 'risk_register' with the new exposure
+         ☁️ risk_register add_entry asset discovered_asset risk_level "HIGH"
+         
+         -- Action 5: Tag as a 'third_party' 'dependency' if hosted on unapproved vendor
+         ⚠️ if discovered_asset.vendor not in APPROVED_VENDORS
+            ☁️ asm tag_asset discovered_asset "UNAPPROVED_VENDOR"
+         🔴 end
+      🔴 end
+
+      -- ============================================================================
+      -- 5. THE HYGIENE LAYER (certificate_inventory, subdomain, public_endpoint)
+      -- ============================================================================
+      -- Action 6: Validate the SSL/TLS status in the 'certificate_inventory'
+      🔹 set cert_status: Object = asm check_certificate discovered_asset
+      
+      ⚠️ when cert_status.is_expired == true or cert_status.issuer == "Self-Signed"
+         🚨 alert warning message "CERTIFICATE RISK: {discovered_asset.hostname} has invalid/expired SSL."
+         ☁️ asm rotate_certificate discovered_asset -- Automated renewal
+      🔴 end
+      
+      -- Action 7: Audit the 'dns_inventory' for 'subdomain' take-over risks
+      ☁️ asm audit_dns_records for discovered_asset.hostname
+
+      -- Action 8: Notify the Infrastructure and Security teams
+      📡 notify slack channel "#asm-exposure-alerts" message "🔭 *Attack Surface Update* \n*Asset:* `{discovered_asset.hostname}` \n*IP:* `{exposure_point}` \n*Status:* { (is_managed) ? 'MANAGED' : 'SHADOW_IT' } \n*Risk:* Ports `{open_ports}` discovered. Added to Risk Register."
+
+      -- ============================================================================
+      -- 6. EVIDENCE & PROOF
+      -- ============================================================================
+      📝 evidence record "ASM_Discovery_Cycle" details {
+          asset: discovered_asset.hostname,
+          services_found: services,
+          exposure_score: scan_results.risk_score,
+          action: "EXTERNAL_ATTACK_SURFACE_ILLUMINATED"
+      }
+      
+      -- Anchor the scan report hash and DNS snapshot to Rosecoin
+      -- This provides an audit trail of "When did we know about this asset?"
+      ⛓️ rosecoin anchor evidence_pack "latest"
+      
+    🔴 end
+  🔴 end
+🔴 end

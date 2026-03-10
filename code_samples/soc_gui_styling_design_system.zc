@@ -1,0 +1,107 @@
+-- ============================================================================
+-- 🛡️ ROCHESTON ZELC PROGRAMMING LANGUAGE
+-- 👤 Creator: Haja Mo
+-- 🏢 Organization: Rocheston
+-- 📜 Platform: Rocheston Agentic AI Cybersecurity Automation Platform
+-- ============================================================================
+
+-- Playbook: Design System & UX Governance (UI Keywords)
+-- Intent: Demonstrates 'font', 'window_buttons', 'palette', and 'theme'. 
+-- Establices the visual identity and behavioral logic for all AINA applications.
+-- Infrastructure: Rocheston Styling Engine, GPU-Accelerated Font Renderer.
+-- Note: 'contrast_ratio' is automatically checked to ensure accessibility.
+
+package soc.gui_styling
+use colors, fonts, theme, window, slack, rosecoin
+
+-- ============================================================================
+-- 1. GLOBAL COLOR PALETTE (Hex & RGBA)
+-- ============================================================================
+🎨 set PRIMARY_DARK: color = #0A0E14
+🎨 set ACCENT_NEON: color = #00FF99
+🎨 set ALERT_CRITICAL: color = #FF3366
+🎨 set TEXT_DIM: rgba = [255, 255, 255, 0.7]
+
+-- ============================================================================
+-- 2. TYPOGRAPHY & FONTS (font, kerning, weight)
+-- ============================================================================
+🔡 font define_family "Rocheston-Mono" source "/assets/fonts/rocheston_mono.ttf"
+🔡 font set_style id "heading-1" family "Rocheston-Mono" size 32 weight "Bold" kerning 1.5
+🔡 font set_style id "log-text" family "Courier-Prime" size 14 weight "Regular" line_height 1.2
+
+-- ============================================================================
+-- 3. WINDOW DECORATION (window_buttons, chrome, titlebar)
+-- ============================================================================
+✨ window set_chrome "Cyber-Frame-V2"
+✨ window add_buttons ["minimize", "maximize", "close"] style "mac-inspired-neon"
+✨ window set_titlebar height 40 color PRIMARY_DARK icon "zelfire_logo.png"
+✨ window enable_shadow size 20 blur 15 color [0, 0, 0, 0.8]
+
+-- ============================================================================
+-- 4. THE ENTRY POINT (The Check Block)
+-- ============================================================================
+🔥 check UIEnvironmentInitialization
+  
+  -- Trigger Gate: User switches from 'Light Mode' to 'Dark Mode' or logs into a SOC console
+  ⚠️ when theme_change_requested or application_launch
+    
+    🔹 set current_theme: String = event.theme_name
+    🔹 set device_type: String = event.display_type -- e.g., "Retina-Display"
+    
+    🚨 alert info message "GUI ENGINE: Applying {current_theme} design system to console."
+
+    -- ============================================================================
+    -- 5. THE THEME APPLICATION (colors, palette, theme)
+    -- ============================================================================
+    ⚡ do
+      
+      -- Action 1: Load the color palette and apply global background
+      -- Voice-friendly: "Apply dark theme..."
+      ☁️ theme load current_theme
+      ☁️ gui set_background_color PRIMARY_DARK
+      
+      -- Action 2: Recalculate 'contrast_ratio' for text readability
+      🔹 set contrast_score: Decimal = gui calculate_contrast for "heading-1" against PRIMARY_DARK
+      
+      ⚠️ when contrast_score < 4.5
+         🚨 alert warning message "UX ALERT: Contrast too low ({contrast_score}). Overriding text color."
+         ☁️ font set_color "heading-1" to colors.WHITE
+      🔴 end
+
+      -- ============================================================================
+      -- 6. INTERACTIVE ELEMENTS (hover, click_fx, state)
+      -- ============================================================================
+      -- Action 3: Define button 'hover' and 'click_fx' animations
+      -- Voice-friendly: "Set button styling..."
+      ☁️ gui widget "btn_lockdown" set_hover_color ACCENT_NEON
+      ☁️ gui widget "btn_lockdown" set_click_animation "ripple-glow"
+      
+      -- Action 4: Initialize the status 'gauges' with specific color thresholds
+      ☁️ gui gauge "threat_meter" set_color_stops [[0, ACCENT_NEON], [70, colors.YELLOW], [90, ALERT_CRITICAL]]
+
+      -- ============================================================================
+      -- 7. VISUAL FEEDBACK & NOTIFICATION
+      -- ============================================================================
+      -- Action 5: Draw a 'glow' effect around the active window
+      ☁️ window apply_glow color ACCENT_NEON intensity 0.5
+      
+      -- Action 6: Notify the user that the UI has been optimized
+      📡 notify slack channel "#dev-ui-logs" message "🎨 *UI Theme Applied* \n*Theme:* `{current_theme}` \n*Contrast:* `{contrast_score}` \n*Status:* High-DPI Assets Loaded. Typography Synced."
+
+      -- ============================================================================
+      -- 8. EVIDENCE & STATE RECORD
+      -- ============================================================================
+      📝 evidence record "UI_Styling_Success" details {
+          theme: current_theme,
+          display: device_type,
+          font_status: "RENDERED",
+          action: "UX_CONSISTENCY_LOCKED"
+      }
+      
+      -- Anchor the UI configuration hash to Rosecoin
+      -- Ensures the console state cannot be visually spoofed without a trace.
+      ⛓️ rosecoin anchor evidence_pack "latest"
+      
+    🔴 end
+  🔴 end
+🔴 end

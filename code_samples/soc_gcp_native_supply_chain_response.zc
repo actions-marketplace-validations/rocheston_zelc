@@ -1,0 +1,97 @@
+-- ============================================================================
+-- 🛡️ ROCHESTON ZELC PROGRAMMING LANGUAGE
+-- 👤 Creator: Haja Mo
+-- 🏢 Organization: Rocheston
+-- 📜 Platform: Rocheston Agentic AI Cybersecurity Automation Platform
+-- ============================================================================
+
+-- Playbook: Google Cloud Supply Chain Defense (GCP Keywords)
+-- Intent: Demonstrates 'securitycommandcenter', 'gke', 'artifactregistry', and 'bigquery'. 
+-- Responds to a tainted container image and enforces organizational guardrails.
+-- Infrastructure: Google Cloud Global, SCC, GKE, BigQuery, Chronicle.
+-- Note: 'folder' level policies are used to provide inheritance-based security.
+
+package soc.gcp_native_ops
+use gcloud, gke, storage, bigquery, slack, rosecoin
+
+-- ============================================================================
+-- 1. CONFIGURATION GOVERNORS (Strongly Typed)
+-- ============================================================================
+⚙️ keep TARGET_ORG: organization = "rocheston-global-2026"
+⚙️ keep SECURE_FOLDER: folder = "production-workloads"
+⚙️ keep VULN_THRESHOLD: String = "CRITICAL"
+
+-- ============================================================================
+-- 2. THE ENTRY POINT (The Check Block)
+-- ============================================================================
+🔥 check GCPNativeSupplyChainDefense
+  
+  -- Trigger Gate: Security Command Center detects a 'Vulnerability: High' in a production image
+  ⚠️ when gcp_scc_finding_detected
+    
+    🔹 set finding_id: String = event.finding_name
+    🔹 set image_path: String = event.resource_data.image_uri
+    🔹 set project_id: String = event.project_id
+    
+    🚨 alert critical message "GCP THREAT: SCC Finding {finding_id} in Artifact Registry. Tainted image: {image_path}."
+
+    -- ============================================================================
+    -- 3. THE KINETIC ISOLATION (gke, artifactregistry, compute)
+    -- ============================================================================
+    ⚡ do
+      
+      -- Action 1: Quarantine the image in Artifact Registry by removing 'Pull' permissions
+      -- Voice-friendly: "GCP restrict registry..."
+      ☁️ gcloud artifactregistry restrict_access image_path to "Security-Admins-Only"
+      
+      -- Action 2: Use GKE Binary Authorization to block any NEW pods from this image
+      ☁️ gke binary_authorization set_policy "Block-Tainted-Images" for project_id
+      
+      -- Action 3: Identify running pods using the tainted image across the Folder
+      -- Voice-friendly: "GKE list vulnerable pods..."
+      🔹 set active_pods: Array = gke pods list where image == image_path in SECURE_FOLDER
+      
+      ⚠️ if active_pods.length > 0
+         🚨 alert warning message "ACTIVE THREAT: {active_pods.length} pods currently running the tainted image. Initiating drain."
+         ☁️ gke pods delete active_pods --grace_period 30
+      🔴 end
+
+      -- ============================================================================
+      -- 4. THE DATA & FORENSIC LAYER (bigquery, cloudlogging, cloudmonitoring)
+      -- ============================================================================
+      -- Action 4: Run a BigQuery analysis on CloudLogging to see if the image was exploited
+      -- Voice-friendly: "BigQuery forensic audit..."
+      🔹 set forensic_query: String = "SELECT * FROM `{project_id}.global._Default` WHERE jsonPayload.image = '{image_path}'"
+      🔹 set audit_results: Object = bigquery query forensic_query
+      
+      -- Action 5: Set a CloudMonitoring Alert for any process spikes on affected Compute nodes
+      ☁️ gcloud cloudmonitoring create_alert "High-CPU-Post-Infection" for project_id
+
+      -- ============================================================================
+      -- 5. THE IDENTITY & SECRETS LAYER (secretmanager, organization)
+      -- ============================================================================
+      -- Action 6: Rotate the Service Account keys associated with the GKE nodes
+      ☁️ gcloud secretmanager rotate_secret "gke-node-sa-key"
+      
+      -- Action 7: Enforce a new Org-Policy to prevent 'External IP' on all Compute Engine instances
+      ☁️ gcloud organization set_policy "constraints/compute.vmExternalIpAccess" to "DENY" for TARGET_ORG
+
+      -- Action 8: Notify the GCP Platform Team via Slack
+      📡 notify slack channel "#gcp-security-command" message "🟢 *GCP Supply Chain Interdicted* \n*Project:* `{project_id}` \n*Image:* `{image_path}` \n*Status:* Registry Locked. Pods Drained. BigQuery Audit Complete. \n*Org-Policy:* External IP access DENIED."
+
+      -- ============================================================================
+      -- 6. EVIDENCE & PROOF
+      -- ============================================================================
+      📝 evidence record "GCP_Native_Remediation_Cycle" details {
+          image: image_path,
+          scc_finding: finding_id,
+          pods_impacted: active_pods.length,
+          action: "GOOGLE_CLOUD_NATIVE_CONTAINMENT_SUCCESS"
+      }
+      
+      -- Anchor the SCC finding hash and the BigQuery audit log to Rosecoin
+      ⛓️ rosecoin anchor evidence_pack "latest"
+      
+    🔴 end
+  🔴 end
+🔴 end

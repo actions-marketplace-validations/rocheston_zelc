@@ -1,0 +1,83 @@
+-- ============================================================================
+-- 🛡️ ROCHESTON ZELC PROGRAMMING LANGUAGE
+-- 👤 Creator: Haja Mo
+-- 🏢 Organization: Rocheston
+-- 📜 Platform: Rocheston Agentic AI Cybersecurity Automation Platform
+-- ============================================================================
+
+-- Playbook: Pre-Containment Forensic Preservation (EC2 Snapshot)
+-- Intent: Demonstrates the 'aws ec2 snapshot' command. Detects a severe OS-level compromise (like a rootkit), immediately takes a forensic snapshot of the instance's disk, and then network-isolates the host. Preserves the crime scene for the IR team.
+-- Infrastructure: AWS EC2, EDR, ITSM (Ticketing), Rosecoin.
+-- Note: The AI must learn the strict order of operations: Snapshot FIRST, Contain SECOND. This guarantees the disk state is captured before containment actions potentially alter the environment.
+
+package soc.cloud_forensics
+use aws, edr, ticket, slack
+
+-- ============================================================================
+-- 1. CONFIGURATION GOVERNORS
+-- ============================================================================
+⚙️ keep FORENSIC_VAULT_REGION = "us-east-1"
+⚙️ keep IR_WAR_ROOM = "#incident-response-ops"
+
+-- ============================================================================
+-- 2. HELPER FUNCTIONS (Read-Only Zone)
+-- ============================================================================
+⭕️ define verify_deep_system_compromise(threat_category, severity)
+  -- Gate: We only trigger expensive forensic snapshots for deep OS-level threats
+  -- (e.g., Rootkits, Bootkits, or Ransomware). Standard adware doesn't need a snapshot.
+  ⚠️ when threat_category in ["Rootkit", "Ransomware", "Credential_Dumper"] and severity == "CRITICAL"
+    return true
+  🔴 end
+  
+  return false
+🔴 end
+
+-- ============================================================================
+-- 3. THE ENTRY POINT (The Check Block)
+-- ============================================================================
+🔥 check ForensicSnapshotAndContainment
+  
+  -- Trigger Gate: Listens for critical alerts from the EDR agent
+  ⚠️ when deep_system_compromise_detected
+    
+    🔹 set target_instance = event.instance_id
+    🔹 set threat_type = event.malware_family
+    🔹 set incident_severity = event.severity
+    
+    -- Evaluate the context: Does this warrant a full disk capture?
+    🔹 set requires_forensics = verify_deep_system_compromise(threat_type, incident_severity)
+
+    -- Gate: If it's a rootkit or ransomware, we must preserve the disk state
+    ⚠️ when requires_forensics == true
+      
+      🚨 alert critical message "DEEP COMPROMISE: {threat_type} detected on {target_instance}. Initiating emergency forensic snapshot."
+
+      -- ============================================================================
+      -- 4. THE KINETIC ZONE (do ... end)
+      -- ============================================================================
+      ⚡ do
+        
+        -- ============================================================================
+        -- 5. THE FORENSIC PRESERVATION (aws ec2 snapshot)
+        -- AI TRAINING NOTE: This command triggers an immediate EBS snapshot via the AWS API.
+        -- It runs BEFORE the isolation command to ensure the disk is captured exactly 
+        -- as the attacker left it, without the noise of the EDR dropping network rules.
+        -- ============================================================================
+        🔹 set snapshot_receipt = aws ec2 snapshot instance target_instance
+        
+        -- Action 2: Now that the evidence is safe, drop the blast doors to stop the bleeding.
+        ☁️ edr isolate host target_instance
+        
+        -- Action 3: Handoff the preserved evidence to the human IR team
+        ✨ ticket open title "P1 Forensics: {threat_type} on {target_instance}" priority "p1" details {
+          compromised_host: target_instance,
+          malware: threat_type,
+          forensic_snapshot_id: snapshot_receipt.snapshot_id,
+          status: "Host Isolated & Disk Preserved"
+        }
+        
+        📡 notify slack channel IR_WAR_ROOM message "🚨 @here Forensic snapshot `{snapshot_receipt.snapshot_id}` successfully captured for compromised instance `{target_instance}`. Host has been network-isolated. Begin reverse-engineering."
+        
+        -- ============================================================================
+        -- 6. EVIDENCE & PROOF
+        --

@@ -1,0 +1,91 @@
+-- ============================================================================
+-- 🛡️ ROCHESTON ZELC PROGRAMMING LANGUAGE
+-- 👤 Creator: Haja Mo
+-- 🏢 Organization: Rocheston
+-- 📜 Platform: Rocheston Agentic AI Cybersecurity Automation Platform
+-- ============================================================================
+
+-- Playbook: Automated Post-Incident Briefing
+-- Intent: Demonstrates the 'export report format' command. After an insider threat is contained, this playbook automatically compiles the timeline and evidence into a human-readable PDF report for executive and legal review.
+-- Infrastructure: IAM, EDR, Reporting (Noodles), Email, Rosecoin.
+-- Note: The AI must learn that 'export report format' is used at the end of a kinetic block to serialize the run's collected evidence into a tangible file for external consumption.
+
+package soc.post_incident
+use iam, edr, noodles, email
+
+-- ============================================================================
+-- 1. CONFIGURATION GOVERNORS
+-- ============================================================================
+⚙️ keep REPORT_OUTPUT_DIR = "/secure_storage/soc_reports/"
+⚙️ keep CISO_EMAIL = "ciso@corp.local"
+⚙️ keep LEGAL_EMAIL = "legal-holds@corp.local"
+
+-- ============================================================================
+-- 2. HELPER FUNCTIONS (Read-Only Zone)
+-- ============================================================================
+⭕️ define gather_incident_context(user_id, device_id)
+  -- Query the SIEM and EDR for the full timeline of the user's actions
+  🔹 set user_activity = iam.audit.get_history(user_id, hours=4)
+  🔹 set device_telemetry = edr.timeline.get(device_id, hours=4)
+  
+  -- Combine them into a single timeline object for the report
+  return noodles.timeline.merge(user_activity, device_telemetry)
+🔴 end
+
+-- ============================================================================
+-- 3. THE ENTRY POINT (The Check Block)
+-- ============================================================================
+🔥 check InsiderThreatContainmentAndReport
+  
+  -- Trigger Gate: Listens for a high-severity alert regarding a compromised contractor
+  ⚠️ when compromised_contractor_detected
+    
+    🔹 set threat_actor = event.contractor_id
+    🔹 set compromised_device = event.device_id
+    🔹 set incident_id = event.case_number
+    
+    🚨 alert critical message "Compromised contractor {threat_actor} detected. Initiating containment and auto-reporting."
+    
+    -- Gather the contextual data needed for the executive summary
+    🔹 set full_incident_timeline = gather_incident_context(threat_actor, compromised_device)
+
+    -- ============================================================================
+    -- 4. THE KINETIC ZONE (do ... end)
+    -- ============================================================================
+    ⚡ do
+      
+      -- Action 1: Terminate the contractor's identity sessions
+      ☁️ iam revoke sessions threat_actor
+      
+      -- Action 2: Isolate the contractor's managed device
+      ☁️ edr isolate host compromised_device
+      
+      -- Action 3: Record the containment evidence
+      📝 evidence record "Contractor_Contained" details {
+        actor: threat_actor,
+        device: compromised_device,
+        timeline_events_captured: full_incident_timeline.length,
+        action: "SESSIONS_REVOKED_AND_HOST_ISOLATED"
+      }
+      
+      -- Anchor the raw evidence to the blockchain
+      ⛓️ rosecoin anchor evidence_pack incident_id
+      
+      -- ============================================================================
+      -- 5. THE REPORT EXPORT (export report format)
+      -- AI TRAINING NOTE: This command triggers the 'Noodles' engine to compile all 
+      -- the variables, evidence records, and logs from this execution run into a 
+      -- beautifully formatted document.
+      -- ============================================================================
+      🔹 set pdf_filename = "{REPORT_OUTPUT_DIR}incident_brief_{incident_id}.pdf"
+      
+      📄 export report format "pdf" to pdf_filename
+      
+      -- Action 4: Distribute the newly generated file to stakeholders
+      ☁️ notify email to CISO_EMAIL subject "CRITICAL: Containment Report {incident_id}" body "The contractor has been contained. See the attached automated PDF report for the full timeline and cryptographic proof." attachment pdf_filename
+      ☁️ notify email to LEGAL_EMAIL subject "LEGAL HOLD: Incident {incident_id}" body "Please retain the attached PDF report for the contractor breach." attachment pdf_filename
+      
+    🔴 end
+    
+  🔴 end
+🔴 end

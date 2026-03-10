@@ -1,0 +1,99 @@
+-- ============================================================================
+-- 🛡️ ROCHESTON ZELC PROGRAMMING LANGUAGE
+-- 👤 Creator: Haja Mo
+-- 🏢 Organization: Rocheston
+-- 📜 Platform: Rocheston Agentic AI Cybersecurity Automation Platform
+-- ============================================================================
+
+-- Playbook: Azure Native Detection & Response (Azure Keywords)
+-- Intent: Demonstrates 'sentinel', 'nsg', 'entra', and 'defender_cloud'. 
+-- Coordinates a native Microsoft Cloud response to an identity and network threat.
+-- Infrastructure: Azure Global, Microsoft Sentinel, Entra ID, Log Analytics.
+-- Note: 'blueprint' is used to re-apply the security baseline post-incident.
+
+package soc.azure_native_ops
+use azure, entra, sentinel, defender, functions, slack, rosecoin
+
+-- ============================================================================
+-- 1. CONFIGURATION GOVERNORS (Strongly Typed)
+-- ============================================================================
+⚙️ keep TARGET_RG: String = "rg-production-compute"
+⚙️ keep SECURITY_VNET: String = "vnet-secure-backend"
+⚙️ keep ANALYTICS_WORKSPACE: String = "law-rocheston-soc"
+
+-- ============================================================================
+-- 2. THE ENTRY POINT (The Check Block)
+-- ============================================================================
+🔥 check AzureNativeThreatResponse
+  
+  -- Trigger Gate: Sentinel detects 'Massive Login Failure' on a critical VM
+  ⚠️ when azure_sentinel_alert_detected
+    
+    🔹 set alert_id: String = event.system_alert_id
+    🔹 set target_vm: vm = event.impacted_resource
+    🔹 set attacker_ip: IPv4 = event.attacker_ip
+    
+    🚨 alert critical message "AZURE THREAT: Sentinel Alert {alert_id} on {target_vm}. Initiating Entra and NSG lockdown."
+
+    -- ============================================================================
+    -- 3. THE KINETIC ISOLATION (nsg, vnet, monitor)
+    -- ============================================================================
+    ⚡ do
+      
+      -- Action 1: Block the attacker IP at the Network Security Group (NSG) level
+      -- Voice-friendly: "Azure update NSG..."
+      ☁️ azure nsg add_rule "Block-Attacker-{attacker_ip}" priority 100 direction "Inbound" action "Deny" ip attacker_ip
+      
+      -- Action 2: Use Log Analytics to pull the 'process_tree' from the VM
+      -- This identifies if the brute force led to a successful shell execution.
+      🔹 set forensic_query: String = "SecurityEvent | where Computer == '{target_vm.name}' | order by TimeGenerated desc"
+      🔹 set forensic_data: Object = azure loganalytics query ANALYTICS_WORKSPACE query forensic_query
+      
+      -- Action 3: Move the VM into a 'Quarantine' Subnet within the VNet
+      ☁️ azure vm update target_vm vnet SECURITY_VNET subnet "snet-quarantine"
+
+      -- ============================================================================
+      -- 4. THE IDENTITY PROTECTION LAYER (entra, aad, defender)
+      -- ============================================================================
+      -- Action 4: Flag the user as "High Risk" in Entra ID (Azure AD)
+      -- This triggers conditional access policies to require MFA or block login.
+      ☁️ entra user set_risk_level event.user_principal "high"
+      
+      -- Action 5: Revoke all active sessions for the compromised user in Entra
+      ☁️ entra user revoke_sessions event.user_principal
+      
+      -- Action 6: Trigger Defender for Cloud to perform a vulnerability 'scan' on the VM
+      ☁️ defender_cloud trigger_scan target_vm
+
+      -- ============================================================================
+      -- 5. THE COMPUTE & DATA LAYER (functions, sql, cosmosdb, storage)
+      -- ============================================================================
+      -- Action 7: Call an Azure Function to rotate SQL connection strings
+      -- This secures the database if the attacker gained local VM access.
+      ☁️ azure functions invoke "RotateSqlSecrets" payload { "resource": "sql-prod-db" }
+      
+      -- Action 8: Restrict access to the Storage Blob container for this identity
+      ☁️ azure storage blob set_permissions "secure-logs" user event.user_principal access "none"
+      
+      -- Action 9: Re-deploy the Azure Blueprint to ensure 'drift' is corrected
+      ☁️ azure blueprint assign "soc-compliance-baseline" to TARGET_RG
+
+      -- Action 10: Notify the Azure Security Team via Slack
+      📡 notify slack channel "#azure-security-center" message "🟦 *Azure Native Response Successful* \n*VM:* `{target_vm.name}` \n*Alert:* `{alert_id}` \n*Status:* NSG Blocked. Entra Sessions Revoked. VM Quarantined. \n*Risk Level:* Set to HIGH for `{event.user_principal}`."
+
+      -- ============================================================================
+      -- 6. EVIDENCE & PROOF
+      -- ============================================================================
+      📝 evidence record "Azure_Native_Remediation_Cycle" details {
+          vm: target_vm.id,
+          sentinel_alert: alert_id,
+          nsg_rule: "Block-Attacker-{attacker_ip}",
+          action: "AZURE_NATIVE_CONTAINMENT_SUCCESS"
+      }
+      
+      -- Anchor the LogAnalytics results and Entra session ID to Rosecoin
+      ⛓️ rosecoin anchor evidence_pack "latest"
+      
+    🔴 end
+  🔴 end
+🔴 end

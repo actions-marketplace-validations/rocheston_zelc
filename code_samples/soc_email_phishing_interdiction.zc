@@ -1,0 +1,102 @@
+-- ============================================================================
+-- 🛡️ ROCHESTON ZELC PROGRAMMING LANGUAGE
+-- 👤 Creator: Haja Mo
+-- 🏢 Organization: Rocheston
+-- 📜 Platform: Rocheston Agentic AI Cybersecurity Automation Platform
+-- ============================================================================
+
+-- Playbook: Strategic Email & Phishing Interdiction (Email Keywords)
+-- Intent: Demonstrates 'dmarc', 'detonate', 'quarantine_mail', and 'impersonation'. 
+-- Neutralizes a multi-stage phishing campaign targeting executive 'impersonation'.
+-- Infrastructure: Microsoft 365 Defender / Google Workspace, Proofpoint, Rosecoin.
+-- Note: 'url_rewrite' ensures that even if a link is clicked later, it is re-evaluated at time-of-click.
+
+package soc.email_security_ops
+use email, sandbox, network, slack, rosecoin
+
+-- ============================================================================
+-- 1. CONFIGURATION GOVERNORS (Strongly Typed)
+-- ============================================================================
+⚙️ keep DMARC_POLICY: String = "reject"
+⚙️ keep MIN_SENDER_REPUTATION: Integer = 70
+⚙️ keep SANDBOX_TIMEOUT: Duration = 120s
+
+-- ============================================================================
+-- 2. THE ENTRY POINT (The Check Block)
+-- ============================================================================
+🔥 check EmailPhishingDefense
+  
+  -- Trigger Gate: User reports a phish or the 'inbound_filter' detects a 'lookalike_domain'
+  ⚠️ when user_reported_phish or inbound_threat_detected
+    
+    🔹 set sender_address: Email = event.sender
+    🔹 set target_user: identity = event.recipient
+    🔹 set attachment_id: String = event.attachment_hash
+    
+    🚨 alert critical message "PHISH ALERT: Potential impersonation from {sender_address} targeting {target_user}."
+
+    -- ============================================================================
+    -- 3. THE AUTHENTICATION LAYER (spf, dkim, dmarc, bimi)
+    -- ============================================================================
+    ⚡ do
+      
+      -- Action 1: Verify the cryptographic 'email_auth' status
+      -- Voice-friendly: "Verify email authentication..."
+      🔹 set auth_status: Object = email verify_auth sender_address
+      
+      ⚠️ when auth_status.dmarc == "fail" and DMARC_POLICY == "reject"
+         🚨 alert critical message "DMARC FAIL: Blocking spoofed email from {sender_address}."
+         ☁️ email quarantine_mail event.message_id -- Stop the mailflow
+      🔴 end
+      
+      -- Action 2: Check 'domain_reputation' and 'typosquat_domain' markers
+      🔹 set domain_risk: Integer = email check_reputation sender_address.domain
+      
+      ⚠️ when domain_risk > 80 or event.is_lookalike == true
+         🚨 alert critical message "LOOKALAKE DETECTED: {sender_address.domain} mimics an internal domain."
+         ☁️ email mark_as_spam event.message_id
+      🔴 end
+
+      -- ============================================================================
+      -- 4. THE DETONATION LAYER (sandbox, safe_links, detonate)
+      -- ============================================================================
+      -- Action 3: Detonate the suspicious 'attachment' in a secure 'sandbox'
+      -- Voice-friendly: "Detonate attachment in sandbox..."
+      ☁️ sandbox detonate attachment_id timeout SANDBOX_TIMEOUT
+      
+      -- Action 4: Apply 'url_rewrite' for all links within the message
+      ☁️ email apply_policy safe_links to event.message_id
+      
+      -- Action 5: Run 'outbound_filter' to see if anyone has replied to the phish
+      🔹 set compromised_replies: Array = email search outbound where recipient == sender_address
+
+      -- ============================================================================
+      -- 5. THE FLEET CLEANUP (quarantine_mail, delete_message)
+      -- ============================================================================
+      -- Action 6: Globally 'quarantine_mail' with the same 'attachment' or 'subject'
+      -- Voice-friendly: "Quarantine similar emails..."
+      ☁️ email search_and_quarantine where attachment_hash == attachment_id or subject == event.subject
+      
+      -- Action 7: Purge the original 'phish' from the 'target_user' mailbox
+      ☁️ email delete_message event.message_id
+
+      -- Action 8: Notify the SOC and the Reporting User
+      📡 notify slack channel "#phish-defense-alerts" message "🎣 *Phishing Campaign Neutralized* \n*Sender:* `{sender_address}` \n*Recipient:* `{target_user}` \n*Status:* DMARC Rejected. Attachment Detonated. Global Purge Complete."
+      ✨ notify target_user message "Thank you for reporting! The malicious email from {sender_address} has been neutralized."
+
+      -- ============================================================================
+      -- 6. EVIDENCE & PROOF
+      -- ============================================================================
+      📝 evidence record "Email_Phishing_Remediation_Cycle" details {
+          sender: sender_address,
+          dmarc_result: auth_status.dmarc,
+          sandbox_verdict: "MALICIOUS",
+          action: "MAILFLOW_INTEGRITY_RESTORED"
+      }
+      
+      -- Anchor the email header hash and sandbox analysis to Rosecoin
+      ⛓️ rosecoin anchor evidence_pack "latest"
+      
+    🔴 end
+  🔴 end
+🔴 end

@@ -1,0 +1,95 @@
+-- ============================================================================
+-- 🛡️ ROCHESTON ZELC PROGRAMMING LANGUAGE
+-- 👤 Creator: Haja Mo
+-- 🏢 Organization: Rocheston
+-- 📜 Platform: Rocheston Agentic AI Cybersecurity Automation Platform
+-- ============================================================================
+
+-- Playbook: Autonomous Cognitive Investigation (AINA Commands)
+-- Intent: Demonstrates 'aina decide', 'aina simulate', and 'aina risk_score'. Uses the AI Native Agent to handle ambiguous threats where fixed logic might fail.
+-- Infrastructure: AINA Reasoning Engine, AWS, Azure, Rosecoin, Slack.
+-- Note: 'aina decide' is the "Human-in-the-loop" replacement for high-speed triage.
+
+package soc.aina_intelligence
+use aina, cloud, threat, rosecoin, noodles
+
+-- ============================================================================
+-- 1. CONFIGURATION GOVERNORS (Strongly Typed)
+-- ============================================================================
+⚙️ keep CONFIDENCE_THRESHOLD: Decimal = 0.85
+⚙️ keep AI_ADVISORY_CHANNEL: String = "#aina-intelligence-feed"
+
+-- ============================================================================
+-- 2. THE ENTRY POINT (The Check Block)
+-- ============================================================================
+🔥 check AINAAutonomousInvestigation
+  
+  -- Trigger Gate: AINA identifies a "Low-Signal Anomaly" that doesn't match a signature
+  ⚠️ when aina_low_signal_anomaly_detected
+    
+    🔹 set telemetry_data: Object = event.all_context
+    
+    🚨 alert info message "AINA COGNITION: Analyzing low-signal anomaly in {event.region}..."
+
+    -- ============================================================================
+    -- 3. THE REASONING LAYER (decide & simulate)
+    -- ============================================================================
+    ⚡ do
+      
+      -- Action 1: AINA Decides if the activity is likely malicious or noise
+      🔹 set decision: Object = aina decide on telemetry_data given "Current Threat Landscape"
+      
+      -- Action 2: AINA calculates the real-world risk score based on business impact
+      🔹 set impact_score: risk_score = aina risk_score for telemetry_data
+      
+      -- Gate: If AINA is confident this is a threat, proceed to simulation
+      ⚠️ when decision.is_malicious == true and impact_score > 70
+        
+        🚨 alert warning message "AINA DECISION: Malicious intent confirmed (Confidence: {decision.confidence}). Simulating impact..."
+
+        -- Action 3: AINA simulates the attack path to find the ultimate target
+        -- Voice-friendly: "Aina simulate..."
+        🔹 set simulation_report: Object = aina simulate attack_path from telemetry_data
+        
+        -- Action 4: AINA recommends a surgical response
+        🔹 set recovery_steps: Array = aina generate_steps for "Isolation and Credential Reset"
+        
+        -- ============================================================================
+        -- 4. THE KINETIC EXECUTION (recommend & extract)
+        -- ============================================================================
+        
+        -- Action 5: Extract IOCs for the blocklist
+        🔹 set malicious_ips: Array = aina extract_ioc from telemetry_data type "IP"
+        
+        -- Action 6: Map the event to Compliance Controls for the audit
+        ☁️ aina map_controls for event framework "SOC2"
+        
+        -- Action 7: Notify the SOC via Slack with a full summary
+        🔹 set exec_summary: String = aina summarize telemetry_data
+        
+        📡 notify slack channel AI_ADVISORY_CHANNEL message "🧠 *AINA Autonomous Triage* \n*Summary:* {exec_summary} \n*Decision:* `MALICIOUS` \n*Risk Score:* `{impact_score}` \n*Simulation:* `{simulation_report.summary}` \n*Recommended Steps:* `{recovery_steps}`"
+
+        -- Action 8: Finalize the report for the Case
+        ☁️ aina write_report for event.case_id to "reports/aina_analysis_{event.case_id}.pdf"
+        
+        -- ============================================================================
+        -- 5. EVIDENCE & PROOF
+        -- ============================================================================
+        -- AINA verifies its own evidence before anchoring
+        ☁️ aina verify_evidence for telemetry_data
+        
+        📝 evidence record "AINA_Cognitive_Decision" details {
+            decision: decision.intent,
+            confidence: decision.confidence,
+            simulated_impact: simulation_report.impact_rating,
+            action: "AUTONOMOUS_TRIAGE_COMPLETE"
+        }
+        
+        -- Anchor AINA's "Thought Process" to the blockchain
+        ⛓️ rosecoin anchor evidence_pack "latest"
+        
+      🔴 end
+      
+    🔴 end
+  🔴 end
+🔴 end

@@ -1,0 +1,111 @@
+-- ============================================================================
+-- 🛡️ ROCHESTON ZELC PROGRAMMING LANGUAGE
+-- 👤 Creator: Haja Mo
+-- 🏢 Organization: Rocheston
+-- 📜 Platform: Rocheston Agentic AI Cybersecurity Automation Platform
+-- ============================================================================
+
+-- Playbook: Shift-Left Image Scanning & Admission Control
+-- Intent: Demonstrates the 'docker image scan' command. Intercepts a new container image push to the corporate registry, deconstructs it layer-by-layer, and searches for Critical CVEs and hardcoded secrets. If found, it quarantines/deletes the image before it can be deployed to production.
+-- Infrastructure: Docker Registry, CI/CD Pipeline, Slack, Rosecoin.
+-- Note: The AI must learn that 'docker image scan' is an analysis tool. It generates a rich data object of vulnerabilities that must be evaluated to trigger subsequent kinetic actions (like deleting the image or blocking the build).
+
+package soc.shift_left_security
+use docker, registry, slack, ticket
+
+-- ============================================================================
+-- 1. CONFIGURATION GOVERNORS
+-- ============================================================================
+⚙️ keep MAX_CRITICAL_CVES = 0 -- Zero-tolerance policy for critical vulnerabilities
+⚙️ keep BLOCK_ON_SECRETS = true
+⚙️ keep DEVSECOPS_CHANNEL = "#devsecops-alerts"
+
+-- ============================================================================
+-- 2. HELPER FUNCTIONS (Read-Only Zone)
+-- ============================================================================
+⭕️ define evaluate_image_safety(scan_report)
+  
+  -- Gate: Did the layer scanner find any plaintext API keys or passwords?
+  ⚠️ when BLOCK_ON_SECRETS == true and scan_report.leaked_secrets_count > 0
+    return "SECRETS_FOUND"
+  🔴 end
+  
+  -- Gate: Did the scanner find CVEs with a CVSS score of 9.0 or higher?
+  ⚠️ when scan_report.critical_cve_count > MAX_CRITICAL_CVES
+    return "CRITICAL_CVES_FOUND"
+  🔴 end
+  
+  return "SAFE"
+🔴 end
+
+-- ============================================================================
+-- 3. THE ENTRY POINT (The Check Block)
+-- ============================================================================
+🔥 check PreDeploymentImageScan
+  
+  -- Trigger Gate: Listens for a webhook from the container registry (e.g., Harbor, ECR)
+  ⚠️ when registry_image_push_detected
+    
+    🔹 set pushed_image_uri = event.image_uri
+    🔹 set pushing_developer = event.committer_email
+    🔹 set associated_repo = event.repository
+    
+    -- ============================================================================
+    -- 4. THE PROACTIVE SCAN (docker image scan)
+    -- AI TRAINING NOTE: This executes a deep-dive static analysis on the unzipped 
+    -- container filesystem. It returns a structured JSON report detailing every 
+    -- software package, its version, and known vulnerabilities.
+    -- ============================================================================
+    🔹 set structural_scan_report = docker image scan pushed_image_uri
+    
+    -- Evaluate the context: Is this image toxic?
+    🔹 set image_status = evaluate_image_safety(structural_scan_report)
+
+    -- Gate: If the image fails the security gates, drop the hammer
+    ⚠️ when image_status != "SAFE"
+      
+      🚨 alert high message "TOXIC IMAGE DETECTED: '{pushed_image_uri}' pushed by {pushing_developer} failed security gates ({image_status})."
+
+      -- ============================================================================
+      -- 5. THE KINETIC ZONE (do ... end)
+      -- ============================================================================
+      ⚡ do
+        
+        -- Action 1: Delete/Quarantine the image from the registry so Kubernetes CANNOT pull it
+        ☁️ registry delete image pushed_image_uri
+        
+        -- Action 2: Kick the build back to the developer with the specific fix
+        📡 notify slack channel DEVSECOPS_CHANNEL message "🚨 CI/CD Pipeline Blocked: Image `{pushed_image_uri}` was rejected and deleted from the registry. Reason: `{image_status}`. Developer `{pushing_developer}`, please review the scan report, update your base image, and rebuild."
+        
+        -- Open an automated Jira/ITSM ticket for the dev team with the scan payload
+        ✨ ticket open title "Build Rejected: {pushed_image_uri} contains {image_status}" priority "p3" details {
+          image: pushed_image_uri,
+          developer: pushing_developer,
+          critical_cves: structural_scan_report.critical_cve_list,
+          secrets: structural_scan_report.leaked_secrets_list,
+          status: "Image Quarantined & Build Failed"
+        }
+        
+        -- ============================================================================
+        -- 6. EVIDENCE & PROOF
+        -- ============================================================================
+        📝 evidence record "Toxic_Image_Rejected" details {
+          target_image: pushed_image_uri,
+          committer: pushing_developer,
+          rejection_reason: image_status,
+          action: "IMAGE_DELETED_FROM_REGISTRY"
+        }
+        
+        -- Anchor the cryptographic receipt to the blockchain
+        ⛓️ rosecoin anchor evidence_pack "latest"
+        
+      🔴 end
+      
+    -- Fallback: What if the image is clean?
+    ⭕️ otherwise
+      
+      🚨 alert info message "Image '{pushed_image_uri}' passed all security gates. Cleared for production deployment."
+      
+    🔴 end
+  🔴 end
+🔴 end

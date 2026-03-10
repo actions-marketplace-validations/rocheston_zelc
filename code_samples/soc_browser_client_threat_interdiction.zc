@@ -1,0 +1,102 @@
+-- ============================================================================
+-- 🛡️ ROCHESTON ZELC PROGRAMMING LANGUAGE
+-- 👤 Creator: Haja Mo
+-- 🏢 Organization: Rocheston
+-- 📜 Platform: Rocheston Agentic AI Cybersecurity Automation Platform
+-- ============================================================================
+
+-- Playbook: Browser & Client-Side Interdiction (Browser Keywords)
+-- Intent: Demonstrates 'csp', 'sri', 'session_hijack', and 'phishing_page'. 
+-- Prevents credential theft and unauthorized script injection at the browser level.
+-- Infrastructure: Zelfire WAF, Browser Extension Agent, Enterprise Chrome/Edge.
+-- Note: 'hsts_preload' is verified to ensure all client-to-server traffic is encrypted.
+
+package soc.browser_security_ops
+use browser, network, waf, slack, rosecoin
+
+-- ============================================================================
+-- 1. CONFIGURATION GOVERNORS (Strongly Typed)
+-- ============================================================================
+⚙️ keep ENFORCE_SRI: Boolean = true
+⚙️ keep CSP_POLICY: String = "default-src 'self'; script-src 'self' https://trusted.cdn.com;"
+⚙️ keep COOKIE_MODE: String = "Strict"
+
+-- ============================================================================
+-- 2. THE ENTRY POINT (The Check Block)
+-- ============================================================================
+🔥 check ClientSideIntegrity
+  
+  -- Trigger Gate: Browser Agent detects a 'phishing_page' or 'session_cookie' theft attempt
+  ⚠️ when browser_threat_detected or suspicious_extension_activity
+    
+    🔹 set target_user: identity = event.user_principal
+    🔹 set source_url: String = event.malicious_url
+    🔹 set threat_vector: String = event.vector -- e.g., "Cookie-Theft"
+    
+    🚨 alert critical message "CLIENT BREACH: {threat_vector} detected on {target_user}'s browser. Source: {source_url}."
+
+    -- ============================================================================
+    -- 3. THE RUNTIME PROTECTION (csp, sri, sandbox, same_origin)
+    -- ============================================================================
+    ⚡ do
+      
+      -- Action 1: Enforce Content Security Policy (CSP) to block inline scripts
+      -- Voice-friendly: "Browser enforce CSP..."
+      ☁️ browser enforce_policy "CSP" value CSP_POLICY for target_user
+      
+      -- Action 2: Verify Subresource Integrity (SRI) for all loaded assets
+      -- This ensures third-party scripts haven't been tampered with.
+      ⚠️ when ENFORCE_SRI == true
+         ☁️ browser verify_sri for "all-external-js"
+      🔴 end
+      
+      -- Action 3: Identify if the site is bypassing 'same_origin' or 'cors_policy'
+      🔹 set cors_violation: Boolean = browser check_cors for source_url
+      
+      ⚠️ when cors_violation == true
+         🚨 alert critical message "CORS VIOLATION: Unauthorized cross-origin request detected from {source_url}."
+         ☁️ browser terminate_tab source_url
+      🔴 end
+
+      -- ============================================================================
+      -- 4. THE SESSION PROTECTION (cookie_theft, session_hijack, same_site)
+      -- ============================================================================
+      -- Action 4: Rotate all 'session_cookie' tokens for the impacted user
+      -- Voice-friendly: "Rotate session cookies..."
+      ☁️ identity rotate_sessions for target_user
+      
+      -- Action 5: Set all cookies to 'SameSite=Strict' and 'HttpOnly'
+      ☁️ browser set_cookie_attributes "all" same_site COOKIE_MODE http_only true
+      
+      -- Action 6: Block the malicious 'phishing_page' across the entire fleet
+      -- Prevents 'tabnabbing' or 'mixed_content' lures from spreading.
+      ☁️ network block url source_url global
+
+      -- ============================================================================
+      -- 5. THE HEADER & COMPLIANCE LAYER (x_frame_options, hsts_preload)
+      -- ============================================================================
+      -- Action 7: Verify 'x_frame_options' to prevent clickjacking
+      ☁️ waf add_header "X-Frame-Options" "DENY" for all_sites
+      
+      -- Action 8: Enforce 'hsts_preload' to prevent SSL-Stripping
+      ☁️ browser enforce_hsts_preload for "rocheston.io"
+
+      -- Action 9: Notify the Security Operations Center
+      📡 notify slack channel "#browser-security-alerts" message "🌐 *Browser Interdiction Successful* \n*User:* `{target_user}` \n*Vector:* `{threat_vector}` \n*Status:* Malicious Tab Closed. Sessions Rotated. URL Blocked Global. CSP Enforced."
+
+      -- ============================================================================
+      -- 6. EVIDENCE & PROOF
+      -- ============================================================================
+      📝 evidence record "Browser_Client_Remediation_Cycle" details {
+          user: target_user,
+          url: source_url,
+          vector: threat_vector,
+          action: "CLIENT_SIDE_RUNTIME_SECURED"
+      }
+      
+      -- Anchor the phishing page fingerprint and the CSP hash to Rosecoin
+      ⛓️ rosecoin anchor evidence_pack "latest"
+      
+    🔴 end
+  🔴 end
+🔴 end
