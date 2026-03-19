@@ -19,5 +19,4 @@ runs:
   args:
     - run
     - ${{ inputs.playbook }}
-    - --api-key
-    - ${{ inputs.api_key }}
+    
