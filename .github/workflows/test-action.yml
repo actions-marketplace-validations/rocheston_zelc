@@ -1,0 +1,17 @@
+name: Test ZelC Action
+on: [push, pull_request]
+
+jobs:
+  test_kinetic_engine:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      
+      - name: 🛡️ Run ZelC Playbook Test
+        # This tells GitHub to run the action.yml in your own repo!
+        uses: ./ 
+        with:
+          # Pointing it to one of your awesome code samples
+          playbook: 'code_samples/devsecops_provenance_artifact_signing.zc'
+          api_key: 'TEST_KEY_STUB'
