@@ -13,5 +13,5 @@ jobs:
         uses: ./ 
         with:
           # Pointing it to one of your awesome code samples
-          playbook: 'code_samples/devsecops_provenance_artifact_signing.zc'
+          playbook: 'code_samples/hello.zelc'
           api_key: 'TEST_KEY_STUB'
